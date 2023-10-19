@@ -15,4 +15,7 @@ int main(int argc, char *argv[]) {
 
   // Init the KPC
   KeyPointsCollector kpc(filename);
+
+  // Collect
+  kpc.collectCursors();
 }
