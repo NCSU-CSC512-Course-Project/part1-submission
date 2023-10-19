@@ -26,3 +26,6 @@ KeyPointsCollector::analyzeGotoCursor(CXCursor C) {}
 
 KeyPointsCollector::BranchPointInfo
 KeyPointsCollector::analyzeSwitchCursor(CXCursor C) {}
+
+KeyPointsCollector::FuncPtrInfo
+KeyPointsCollector::analyzeFuncPtrCursor(CXCursor C) {}

@@ -55,18 +55,18 @@ bool KeyPointsCollector::isBranchPointOrFunctionPtr(CXCursorKind K) {
 
 CXChildVisitResult KeyPointsCollector::VisitorFunction(CXCursor current,
                                                        CXCursor parent,
-                                                       CXClientData kpc)
-    KeyPointsCollector *instance = static_cast<KeyPointsCollector *>(kpc);
+                                                       CXClientData kpc) {
+  KeyPointsCollector *instance = static_cast<KeyPointsCollector *>(kpc);
+  CXCursorKind kind = clang_getCursorKind(current);
+  if (instance->isBranchPointOrFunctionPtr(kind)) {
+    std::cout << "Adding Cursor type: "
+              << clang_getCString(clang_getCursorKindSpelling(kind))
+              << std::endl;
+    ;
+    instance->addCursor(current);
+  }
 
-CXCursorKind kind = clang_getCursorKind(current);
-if (instance->isBranchPointOrFunctionPtr(kind)) {
-  std::cout << "Adding Cursor type: "
-            << clang_getCString(clang_getCursorKindSpelling(kind)) << std::endl;
-  ;
-  instance->addCursor(current);
-}
-
-return CXChildVisit_Recurse;
+  return CXChildVisit_Recurse;
 }
 
 void KeyPointsCollector::collectCursors() {

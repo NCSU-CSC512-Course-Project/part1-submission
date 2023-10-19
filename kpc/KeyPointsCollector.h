@@ -93,6 +93,9 @@ class KeyPointsCollector {
   // Children: TBD, a bit more complex than the others
   BranchPointInfo analyzeSwitchCursor(CXCursor C);
 
+  // This will be passed a call expression for now.
+  FuncPtrInfo analyzeFuncPtrCursor(CXCursor C);
+
 public:
   // KPC ctor, takes file name in, ownership is transfered to KPC.
   // Inits the translation unit, invoking the clang parser.
