@@ -1,11 +1,39 @@
 
-int test_fun(int x) {
-  return x;
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 int main(void) {
+  int x;
   if (1) {
-    return (*test_fun)(10);
+    x = 1;
+  } else {
+    x = 2;
   }
-  return (*other)(0);
+  return x;
 }

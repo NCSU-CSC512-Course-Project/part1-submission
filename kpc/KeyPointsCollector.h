@@ -6,6 +6,8 @@
 
 #include <clang-c/Index.h>
 
+#include <map>
+#include <stack>
 #include <string>
 #include <vector>
 
@@ -34,33 +36,28 @@ class KeyPointsCollector {
   // 'this' with a lambda. Consequently, we mark this function as static and
   // pass 'this' for the clientdata parameter in the clang_visitChildren call to
   // retrieve the KPC instance.
-  static CXChildVisitResult VisitorFunction(CXCursor current, CXCursor parent,
-                                            CXClientData clientData);
+  static CXChildVisitResult VisitorFunctionInitial(CXCursor current,
+                                                   CXCursor parent,
+                                                   CXClientData clientData);
 
-  // We can generalize the output of each node with three different
-  // CXSourceLocations:
-  //    1. The branch point itself. e.g  line 5: if (condition) ...
-  //    2. The target or 'then' of the branch point. e.g line 6: { if stmt
-  //    body... }
-  //    3. The end or 'else' of the branch point. e.g line 7: else {...} ...
   struct BranchPointInfo {
-    CXSourceLocation branchPoint;
-    CXSourceLocation branchTarget;
-    CXSourceLocation branchEnd;
+    unsigned branchPoint;
+    std::vector<unsigned> targets;
+    unsigned *getBranchPointOut() { return &branchPoint; }
+    void addTarget(unsigned target) { targets.push_back(target); }
   };
 
   // Define a separate information struct for function pointers.
   struct FuncPtrInfo {
     std::string name;
-    CXSourceLocation funcLoc;
+    unsigned funcLoc;
   };
 
   // Analysis Methods -
   // Once the cursors have been collected from the translation unit, some
   // analysis needs to happen on the cursors before the branch ptr trace can be
-  // output. Depending on the type of cursor, different steps need to be taken
-  // to gather information about that cursors children as each cursor or
-  // ASTNode, has a differing children heirarchy.
+  // output. Depending on the type of cursor, a corressponding visitor function
+  // will be called to handle the analysis.
 
   // The information associated with different nodes can be found in
   // the clang source code:
@@ -70,31 +67,63 @@ class KeyPointsCollector {
   // for the BP trace.
 
   // Children: then, else
-  BranchPointInfo analyzeIfCursor(CXCursor C);
+  static CXChildVisitResult ifStmtVisitor(CXCursor current, CXCursor parent,
+                                          CXClientData kpc);
 
   // Children: body
-  BranchPointInfo analyzeForCursor(CXCursor C);
+  static CXChildVisitResult forStmtVisitor(CXCursor current, CXCursor parent,
+                                           CXClientData kpc);
 
   // Children: body
-  BranchPointInfo analyzeDoCursor(CXCursor C);
+  static CXChildVisitResult doStmtVisitor(CXCursor current, CXCursor parent,
+                                          CXClientData kpc);
 
   // Children: body
-  BranchPointInfo analyzeWhileCursor(CXCursor C);
+  static CXChildVisitResult whileStmtVisitor(CXCursor current, CXCursor parent,
+                                             CXClientData kpc);
 
   // Children: TBD
-  BranchPointInfo analyzeBreakCursor(CXCursor C);
-
-  // Children: TBD
-  BranchPointInfo analyzeContinueCursor(CXCursor C);
-
-  // Children: TBD
-  BranchPointInfo analyzeGotoCursor(CXCursor C);
+  static CXChildVisitResult gotoStmtVisitor(CXCursor current, CXCursor parent,
+                                            CXClientData kpc);
 
   // Children: TBD, a bit more complex than the others
-  BranchPointInfo analyzeSwitchCursor(CXCursor C);
+  static CXChildVisitResult switchVisitor(CXCursor current, CXCursor parent,
+                                          CXClientData kpc);
 
   // This will be passed a call expression for now.
-  FuncPtrInfo analyzeFuncPtrCursor(CXCursor C);
+  static CXChildVisitResult callExprVisitor(CXCursor current, CXCursor parent,
+                                            CXClientData kpc);
+
+  static CXChildVisitResult getFirstChildInCmpnd(CXCursor current,
+                                                 CXCursor parent, CXClientData);
+
+  // Core analysis function, swtiches on cursor types and invokes
+  // the correct visitor function.
+  void analyzeChildren(CXCursor C);
+
+  // Push a new BP onto the stack
+  void pushNewBranchPoint() {
+    branchPointStack.push({.branchPoint = 0});
+  }
+
+  // Amount of branches, initialized to 0 in ctor
+  unsigned branchCount;
+
+  // Stack of branch points being analyzed.
+  std::stack<BranchPointInfo> branchPointStack;
+
+  // After a branch analysis is done, add the branch point,
+  // and a new branch for each target that was found.
+  void addBranches();
+
+  // Core branch dictionary
+  // The outer map holds the initial branch point line number,
+  // whilst the inner map holds the target line number for the branch,
+  // mapped to the branch id e.g. 'br_2'
+  std::map<unsigned, std::map<unsigned, std::string>> branchDictionary;
+
+  // Called once branch analysis has completed.
+  void addBranchesToDictionary();
 
 public:
   // KPC ctor, takes file name in, ownership is transfered to KPC.
@@ -118,6 +147,9 @@ public:
 
   // Add a cursor to cursorObjs
   void addCursor(CXCursor const &C) { cursorObjs.push_back(C); }
+
+  // Get pointer to current branch point info struct
+  BranchPointInfo *getCurrentBranch() { return &(branchPointStack.top()); }
 
   // Iterates over cursorObjs and constructs the branch ptr trace.
   // Once traversal and parsing have finished.

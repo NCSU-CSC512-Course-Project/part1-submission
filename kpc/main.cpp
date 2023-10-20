@@ -4,6 +4,7 @@
 #include "KeyPointsCollector.h"
 
 #include <cassert>
+#include <iostream>
 
 int main(int argc, char *argv[]) {
 
@@ -18,4 +19,6 @@ int main(int argc, char *argv[]) {
 
   // Collect
   kpc.collectCursors();
+  kpc.outputBranchPtrTrace();
+
 }
