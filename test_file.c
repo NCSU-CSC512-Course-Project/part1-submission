@@ -1,39 +1,18 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+int add(int a, int b) {
+  return a + b; 
+}
 
 
 int main(void) {
-  int x;
-  if (1) {
-    x = 1;
-  } else {
-    x = 2;
+  int (*add_ptr)(int, int) = &add;
+  
+  int result = (*add_ptr)(2, 2);
+
+  if (result == 4) {
+    for (int acc = 1; result <= 10;) {
+      result += acc;
+    }
   }
-  return x;
+
+  return result;
 }

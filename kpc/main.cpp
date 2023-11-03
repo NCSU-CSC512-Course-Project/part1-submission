@@ -7,6 +7,7 @@
 #include <iostream>
 
 int main(int argc, char *argv[]) {
+  ;
 
   // Check a filename was passed
   assert(argc > 1 && "Must provide a file name as an argument!");
@@ -15,10 +16,9 @@ int main(int argc, char *argv[]) {
   const std::string filename(argv[1]);
 
   // Init the KPC
-  KeyPointsCollector kpc(filename);
+  KeyPointsCollector kpc(
+      filename, (argc > 2 && !std::string(argv[2]).compare("--debug")));
 
   // Collect
   kpc.collectCursors();
-  kpc.outputBranchPtrTrace();
-
 }

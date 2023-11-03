@@ -2,6 +2,7 @@
 CXX = clang++
 CXXFLAGS = -O0 -g3 -std=c++17
 LINKER_FLAGS = -lclang
+DBG_FLAGS = -DDEBUG=true
 
 DBG = gdb
 
@@ -19,6 +20,9 @@ all: dirs main
 
 run: all
 	$(EXE) test_file.c
+
+drun: all
+	$(EXE) test_file.c --debug
 
 dbg: all
 	$(DBG) -q --args $(EXE) test_file.c	
