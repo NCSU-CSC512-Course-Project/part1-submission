@@ -197,9 +197,9 @@ CXChildVisitResult KeyPointsCollector::VisitVarDecl(CXCursor current,
                             nullptr, nullptr);
 
   // Get token and its spelling
-  CXToken *funcDeclToken = clang_getToken(instance->getTU(), varDeclLoc);
+  CXToken *varDeclToken = clang_getToken(instance->getTU(), varDeclLoc);
   std::string varName =
-      CXSTR(clang_getTokenSpelling(instance->getTU(), *funcDeclToken));
+      CXSTR(clang_getTokenSpelling(instance->getTU(), *varDeclToken));
 
   // Get reference to map for checking
   std::map<std::string, unsigned> varMap = instance->getVarDecls();
@@ -212,6 +212,7 @@ CXChildVisitResult KeyPointsCollector::VisitVarDecl(CXCursor current,
     }
     instance->addVarDeclToMap(varName, varDeclLineNum);
   }
+  clang_disposeTokens(instance->getTU(), varDeclToken, 1);
   return CXChildVisit_Break;
 }
 
@@ -242,6 +243,7 @@ CXChildVisitResult KeyPointsCollector::VisitFuncDecl(CXCursor current,
     }
     instance->addFuncDeclToMap(funcName, funcDeclLineNum);
   }
+  clang_disposeTokens(instance->getTU(), funcDeclToken, 1);
   return CXChildVisit_Break;
 }
 
