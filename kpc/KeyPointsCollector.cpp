@@ -5,6 +5,7 @@
 #include "Common.h"
 #include <fstream>
 #include <iostream>
+#include <sstream>
 
 // Ctor Implementation
 KeyPointsCollector::KeyPointsCollector(const std::string &filename, bool debug)
@@ -283,5 +284,40 @@ void KeyPointsCollector::addBranchesToDictionary() {
       targetsAndIds[target] = "br_" + std::to_string(++branchCount);
     }
     branchDictionary[branchPoint.branchPoint] = targetsAndIds;
+  }
+}
+
+void KeyPointsCollector::invokeValgrind() {
+
+  // First, we need to compile the code we just parsed into an executable.
+
+  // See what compiler we are working with on the machine.
+  std::string c_compiler;
+#if defined(__clang__)
+  c_compiler = "clang";
+#elif defined(__GNUC__)
+  c_compiler = "gcc";
+#endif
+  if (c_compiler.empty()) {
+    c_compiler = std::getenv("CC");
+    if (c_compiler.empty()) {
+      std::cerr << "No viable C compiler found on system!" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+  }
+  std::cout << "C compiler is: " << c_compiler << std::endl;
+
+  // Construct compilation command.
+  std::stringstream compilationCommand;
+  compilationCommand << c_compiler << " " << filename << " -o " << EXE_OUT;
+
+  // Compile
+  bool compiled = static_cast<bool>(system(compilationCommand.str().c_str()));
+
+  if (compiled == EXIT_SUCCESS) {
+    std::remove(EXE_OUT);
+  } else {
+    std::cerr << "There was an error with compilation, exiting!" << std::endl;
+    exit(EXIT_FAILURE);
   }
 }
