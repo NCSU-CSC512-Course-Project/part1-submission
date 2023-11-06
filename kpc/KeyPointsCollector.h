@@ -58,6 +58,14 @@ class KeyPointsCollector {
   static CXChildVisitResult VisitCallExpr(CXCursor current, CXCursor parent,
                                           CXClientData kpc);
 
+  // Visitor for a FuncDecl, to collect name and defintion location.
+  static CXChildVisitResult VisitFuncDecl(CXCursor current, CXCursor parent,
+                                          CXClientData kps);
+
+  // Visitor for a VarDecl, to collect name and location
+  static CXChildVisitResult VisitVarDecl(CXCursor current, CXCursor parent,
+                                         CXClientData kps);
+
   struct BranchPointInfo {
     unsigned branchPoint;
     std::vector<unsigned> targetLineNumbers;
@@ -79,12 +87,6 @@ class KeyPointsCollector {
     void addTarget(unsigned target) { targetLineNumbers.push_back(target); }
   };
 
-  // Define a separate information struct for function pointers.
-  struct FuncPtrInfo {
-    std::string name;
-    unsigned funcLoc;
-  };
-
   // Amount of branches, initialized to 0 in ctor
   unsigned branchCount;
   // Stack of branch points being analyzed.
@@ -92,6 +94,22 @@ class KeyPointsCollector {
 
   // Vector of completed branch points
   std::vector<BranchPointInfo> branchPoints;
+
+  // Map of function names mapped to their definition location
+  std::map<std::string, unsigned> functionDecls;
+
+  // Adds a found function declaration to the map
+  void addFuncDeclToMap(const std::string name, unsigned lineNum) {
+    functionDecls[name] = lineNum;
+  }
+
+  // Map of variable names (VarDecls) mapped to their declaration location
+  std::map<std::string, unsigned> varDecls;
+
+  // Adds a found varable declaration to the map
+  void addVarDeclToMap(const std::string name, unsigned lineNum) {
+    varDecls[name] = lineNum;
+  }
 
   // Push a new BP onto the stack
   void pushNewBranchPoint() { branchPointStack.push(BranchPointInfo()); }
@@ -132,6 +150,10 @@ class KeyPointsCollector {
   // Add completed  branch to vector of branches and pop from stack;
   void addCompletedBranch();
 
+  // Core AST traversal function, once the translation unit has been parsed,
+  // recursively visit nodes and add to cursorObjs if they are of interest.
+  void collectCursors();
+
 public:
   // KPC ctor, takes file name in, ownership is transfered to KPC.
   // Inits the translation unit, invoking the clang parser.
@@ -143,12 +165,21 @@ public:
   // Returns a reference to collected cursor objects.
   const std::vector<CXCursor> &getCursorObjs() const { return cursorObjs; }
 
-  // Core AST traversal function, once the translation unit has been parsed,
-  // recursively visit nodes and add to cursorObjs if they are of interest.
-  void collectCursors();
+  // Returns a reference to map of function defintions
+  const std::map<std::string, unsigned> &getFuncDecls() const {
+    return functionDecls;
+  }
+  //
+  // Returns a reference to map of variable defintions
+  const std::map<std::string, unsigned> &getVarDecls() const {
+    return varDecls;
+  }
 
   // Return pointer to CXFile
   CXFile *getCXFile() { return &cxFile; }
+
+  // Return reference to the translation unit
+  CXTranslationUnit &getTU() { return translationUnit; }
 
   // Get branch dictionary
   const std::map<unsigned, std::map<unsigned, std::string>> &

@@ -32,6 +32,9 @@ KeyPointsCollector::KeyPointsCollector(const std::string &filename, bool debug)
     rootCursor = clang_getTranslationUnitCursor(translationUnit);
     cxFile = clang_getFile(translationUnit, filename.c_str());
     branchCount = 0;
+
+    // Traverse
+    collectCursors();
   } else {
 
     std::cerr << "File with name: " << filename
@@ -133,6 +136,17 @@ CXChildVisitResult KeyPointsCollector::VisitorFunctionCore(CXCursor current,
     instance->addCompletedBranch();
   }
 
+  // If check to see if it is a FuncDecl
+  if (currKind == CXCursor_FunctionDecl) {
+    clang_visitChildren(parent, &KeyPointsCollector::VisitFuncDecl, kpc);
+  }
+
+  // If check to see if it is a VarDecl
+  if (currKind == CXCursor_VarDecl) {
+    clang_visitChildren(parent, &KeyPointsCollector::VisitVarDecl, kpc);
+    return CXChildVisit_Continue;
+  }
+
   return CXChildVisit_Recurse;
 }
 
@@ -169,6 +183,62 @@ CXChildVisitResult KeyPointsCollector::VisitCallExpr(CXCursor current,
   const CXCursorKind currKind = clang_getCursorKind(current);
   const CXCursorKind parrKind = clang_getCursorKind(parent);
   return CXChildVisit_Recurse;
+}
+
+CXChildVisitResult KeyPointsCollector::VisitVarDecl(CXCursor current,
+                                                    CXCursor parent,
+                                                    CXClientData kpc) {
+  KeyPointsCollector *instance = static_cast<KeyPointsCollector *>(kpc);
+
+  // First retrive the line number
+  unsigned varDeclLineNum;
+  CXSourceLocation varDeclLoc = clang_getCursorLocation(current);
+  clang_getSpellingLocation(varDeclLoc, instance->getCXFile(), &varDeclLineNum,
+                            nullptr, nullptr);
+
+  // Get token and its spelling
+  CXToken *funcDeclToken = clang_getToken(instance->getTU(), varDeclLoc);
+  std::string varName =
+      CXSTR(clang_getTokenSpelling(instance->getTU(), *funcDeclToken));
+
+  // Get reference to map for checking
+  auto varMap = instance->getVarDecls();
+
+  // Add to map of FuncDecls
+  if (varMap.find(varName) == varMap.end()) {
+    std::cout << "Found VarDecl: " << varName << " at line # " << varDeclLineNum
+              << std::endl;
+    instance->addFuncDeclToMap(varName, varDeclLineNum);
+  }
+  return CXChildVisit_Break;
+}
+
+CXChildVisitResult KeyPointsCollector::VisitFuncDecl(CXCursor current,
+                                                     CXCursor parent,
+                                                     CXClientData kpc) {
+  KeyPointsCollector *instance = static_cast<KeyPointsCollector *>(kpc);
+
+  // First retrive the line number
+  unsigned funcDeclLineNum;
+  CXSourceLocation funcDeclLoc = clang_getCursorLocation(current);
+  clang_getSpellingLocation(funcDeclLoc, instance->getCXFile(),
+                            &funcDeclLineNum, nullptr, nullptr);
+
+  // Get token and its spelling
+  CXToken *funcDeclToken = clang_getToken(instance->getTU(), funcDeclLoc);
+  std::string funcName =
+      CXSTR(clang_getTokenSpelling(instance->getTU(), *funcDeclToken));
+
+  // Get reference to map for checking
+  auto funcMap = instance->getFuncDecls();
+
+  // Add to map of FuncDecls
+  if (funcMap.find(funcName) == funcMap.end()) {
+    std::cout << "Found FuncDecl: " << funcName << " at line # "
+              << funcDeclLineNum << std::endl;
+    instance->addFuncDeclToMap(funcName, funcDeclLineNum);
+  }
+  return CXChildVisit_Break;
 }
 
 void KeyPointsCollector::collectCursors() {
