@@ -202,13 +202,15 @@ CXChildVisitResult KeyPointsCollector::VisitVarDecl(CXCursor current,
       CXSTR(clang_getTokenSpelling(instance->getTU(), *funcDeclToken));
 
   // Get reference to map for checking
-  auto varMap = instance->getVarDecls();
+  std::map<std::string, unsigned> varMap = instance->getVarDecls();
 
   // Add to map of FuncDecls
   if (varMap.find(varName) == varMap.end()) {
-    std::cout << "Found VarDecl: " << varName << " at line # " << varDeclLineNum
-              << std::endl;
-    instance->addFuncDeclToMap(varName, varDeclLineNum);
+    if (instance->debug) {
+      std::cout << "Found VarDecl: " << varName << " at line # "
+                << varDeclLineNum << std::endl;
+    }
+    instance->addVarDeclToMap(varName, varDeclLineNum);
   }
   return CXChildVisit_Break;
 }
@@ -230,12 +232,14 @@ CXChildVisitResult KeyPointsCollector::VisitFuncDecl(CXCursor current,
       CXSTR(clang_getTokenSpelling(instance->getTU(), *funcDeclToken));
 
   // Get reference to map for checking
-  auto funcMap = instance->getFuncDecls();
+  std::map<std::string, unsigned> funcMap = instance->getFuncDecls();
 
   // Add to map of FuncDecls
   if (funcMap.find(funcName) == funcMap.end()) {
-    std::cout << "Found FuncDecl: " << funcName << " at line # "
-              << funcDeclLineNum << std::endl;
+    if (instance->debug) {
+      std::cout << "Found FuncDecl: " << funcName << " at line # "
+                << funcDeclLineNum << std::endl;
+    }
     instance->addFuncDeclToMap(funcName, funcDeclLineNum);
   }
   return CXChildVisit_Break;
