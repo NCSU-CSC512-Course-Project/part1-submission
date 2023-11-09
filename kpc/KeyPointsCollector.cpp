@@ -34,9 +34,8 @@ KeyPointsCollector::KeyPointsCollector(const std::string &filename, bool debug)
     rootCursor = clang_getTranslationUnitCursor(translationUnit);
     cxFile = clang_getFile(translationUnit, filename.c_str());
     branchCount = 0;
-
+    executeToolchain();
     // Traverse
-    collectCursors();
   } else {
 
     std::cerr << "File with name: " << filename
@@ -274,8 +273,6 @@ void KeyPointsCollector::printCursorKind(const CXCursorKind K) {
             << std::endl;
 }
 
-void KeyPointsCollector::transformProgram() {}
-
 void KeyPointsCollector::createDictionaryFile() {
 
   // Open new file for the dicitonary.
@@ -316,6 +313,47 @@ void KeyPointsCollector::addBranchesToDictionary() {
   }
 }
 
+void KeyPointsCollector::transformProgram() {
+
+  // First, open original file for reading, and modified file for writing.
+  std::ifstream originalProgram(filename);
+  std::ofstream modifiedProgram(std::string(OUT_DIR + filename + ".modified"));
+
+  // Check files opened successfully
+  if (originalProgram.good() && modifiedProgram.good()) {
+
+    // First write the header to the output file
+    modifiedProgram << TRANSFORM_HEADER;
+
+    // Iterate through lines of original
+
+    // Keep track of line numbers
+    unsigned lineNum = 1;
+
+    // Containers for current line and new lines
+    std::string currentLine;
+    std::vector<std::string> newLines;
+
+    // Get ref to branch dictionary
+    std::map<unsigned, std::map<unsigned, std::string>> branchDict =
+        getBranchDictionary();
+
+    while (getline(originalProgram, currentLine)) {
+
+      // We found a branch point group, define a macro for this group
+      if (branchDict.find(lineNum) != branchDict.end()) {
+        // Get targets for branch point.
+        std::map<unsigned, std::string> targets = branchDict[lineNum];
+      }
+      lineNum++;
+    }
+
+  } else {
+    std::cerr << "Error opening program files for transformation!" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+}
+
 void KeyPointsCollector::invokeValgrind() {
 
   // First, we need to compile the code we just parsed into an executable.
@@ -350,4 +388,10 @@ void KeyPointsCollector::invokeValgrind() {
     std::cerr << "There was an error with compilation, exiting!" << std::endl;
     exit(EXIT_FAILURE);
   }
+}
+
+void KeyPointsCollector::executeToolchain() {
+  collectCursors();
+  createDictionaryFile();
+  transformProgram();
 }
