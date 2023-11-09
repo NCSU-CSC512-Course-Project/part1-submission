@@ -187,9 +187,11 @@ public:
     return branchDictionary;
   }
 
-  // Iterates over cursorObjs and constructs the branch ptr trace.
-  // Once traversal and parsing have finished.
-  void outputBranchPtrTrace();
+  // Creates dictionary file of branch points.
+  void createDictionaryFile();
+
+  // Performs the transformation of the program so it can be compiled.
+  void transformProgram();
 
   // Invokes Valgrind through system calls and constructs output.
   void invokeValgrind();

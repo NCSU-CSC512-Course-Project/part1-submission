@@ -3,6 +3,7 @@
 // Implementation of KeyPointsCollector interface.
 #include "KeyPointsCollector.h"
 #include "Common.h"
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -55,7 +56,6 @@ bool KeyPointsCollector::isBranchPointOrFunctionPtr(const CXCursorKind K) {
   case CXCursor_ForStmt:
   case CXCursor_DoStmt:
   case CXCursor_WhileStmt:
-  case CXCursor_GotoStmt:
   case CXCursor_SwitchStmt:
   case CXCursor_CallExpr:
     return true;
@@ -65,6 +65,7 @@ bool KeyPointsCollector::isBranchPointOrFunctionPtr(const CXCursorKind K) {
 }
 
 bool KeyPointsCollector::checkChildAgainstStackTop(CXCursor child) {
+  //
   unsigned childLineNum;
   unsigned childColNum;
   BranchPointInfo *currBranch = getCurrentBranch();
@@ -93,42 +94,43 @@ CXChildVisitResult KeyPointsCollector::VisitorFunctionCore(CXCursor current,
   const CXCursorKind currKind = clang_getCursorKind(current);
   const CXCursorKind parrKind = clang_getCursorKind(parent);
 
-  // If branch point, push new BP to stack, add cursor to list,  and recurse
-  // through children.
-  if (instance->isBranchPointOrFunctionPtr(currKind)) {
+  // If it is a call expression, recurse on children with special visitor. NEEDS
+  // FURTHER IMPLEMENTATION
+  if (currKind == CXCursor_CallExpr) {
+    clang_visitChildren(current, &KeyPointsCollector::VisitCallExpr, kpc);
+    return CXChildVisit_Continue;
+  }
 
-    // If it is a call expression, recurse on children with special visitor.
-    if (currKind == CXCursor_CallExpr) {
-      clang_visitChildren(current, &KeyPointsCollector::VisitCallExpr, kpc);
-      return CXChildVisit_Continue;
-    }
+  // If parent a branch point, and current is a compount statement,
+  // warm up the KPC for analysis of said branch.
+  if (instance->isBranchPointOrFunctionPtr(parrKind) &&
+      currKind == CXCursor_CompoundStmt) {
 
-    instance->addCursor(current);
+    // Push new point to the stack and retrieve location
+    instance->addCursor(parent);
     instance->pushNewBranchPoint();
-    CXSourceLocation loc = clang_getCursorLocation(current);
+    CXSourceLocation loc = clang_getCursorLocation(parent);
     clang_getSpellingLocation(loc, instance->getCXFile(),
                               instance->getCurrentBranch()->getBranchPointOut(),
                               nullptr, nullptr);
-    if (instance->debug) {
-      instance->printFoundBranchPoint(currKind);
-    }
-  }
 
-  // If parent is a branch point and current is a compound statement,
-  // visit first child of compound to get target.
-  if (instance->isBranchPointOrFunctionPtr(parrKind) &&
-      currKind == CXCursor_CompoundStmt) {
+    // Debug routine
+    if (instance->debug) {
+      instance->printFoundBranchPoint(parrKind);
+    }
+
+    // Visit first child of compound to get target.
     clang_visitChildren(current, &KeyPointsCollector::VisitCompoundStmt, kpc);
 
     // Save end of compound statement
     BranchPointInfo *currBranch = instance->getCurrentBranch();
     CXSourceLocation compoundEnd =
         clang_getRangeEnd(clang_getCursorExtent(current));
-
     clang_getSpellingLocation(compoundEnd, instance->getCXFile(),
                               &(currBranch->compoundEndLineNum), nullptr,
                               nullptr);
   }
+
   // Check to see if child is after the current saved compound statement end '}'
   // location, add to completed.
   if (instance->compoundStmtFoundYet() &&
@@ -250,6 +252,8 @@ CXChildVisitResult KeyPointsCollector::VisitFuncDecl(CXCursor current,
 
 void KeyPointsCollector::collectCursors() {
   clang_visitChildren(rootCursor, this->VisitorFunctionCore, this);
+  // Reverse BP list as they were popped in reverse order
+  std::reverse(branchPoints.begin(), branchPoints.end());
   addBranchesToDictionary();
 }
 
@@ -270,7 +274,32 @@ void KeyPointsCollector::printCursorKind(const CXCursorKind K) {
             << std::endl;
 }
 
-void KeyPointsCollector::outputBranchPtrTrace() {}
+void KeyPointsCollector::transformProgram() {}
+
+void KeyPointsCollector::createDictionaryFile() {
+
+  // Open new file for the dicitonary.
+  std::ofstream dictFile(std::string(OUT_DIR + filename + ".branch_dict"));
+  dictFile << "Branch Dictionary for: " << filename << std::endl;
+  dictFile << "-----------------------" << std::string(filename.size(), '-')
+           << std::endl;
+
+  // Get branch dict ref
+  const std::map<unsigned, std::map<unsigned, std::string>> &branchDict =
+      getBranchDictionary();
+
+  // Iterate over branch poitns and their targets
+  for (const std::pair<unsigned, std::map<unsigned, std::string>> &BP :
+       branchDict) {
+    for (const std::pair<unsigned, std::string> &targets : BP.second) {
+      dictFile << targets.second << ": " << filename << ", " << BP.first << ", "
+               << targets.first << std::endl;
+    }
+  }
+
+  // Close file
+  dictFile.close();
+}
 
 void KeyPointsCollector::addCompletedBranch() {
   branchPoints.push_back(branchPointStack.top());
@@ -314,6 +343,7 @@ void KeyPointsCollector::invokeValgrind() {
   // Compile
   bool compiled = static_cast<bool>(system(compilationCommand.str().c_str()));
 
+  // Check if compiled properly
   if (compiled == EXIT_SUCCESS) {
     std::remove(EXE_OUT);
   } else {

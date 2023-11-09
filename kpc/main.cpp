@@ -19,5 +19,5 @@ int main(int argc, char *argv[]) {
   KeyPointsCollector kpc(
       filename, (argc > 2 && !std::string(argv[2]).compare("--debug")));
 
-  kpc.invokeValgrind();
+  kpc.createDictionaryFile();
 }

@@ -6,3 +6,4 @@
 #define CXSTR(X) clang_getCString(X)
 
 #define EXE_OUT "program.out"
+#define OUT_DIR "out/"
