@@ -317,13 +317,16 @@ void KeyPointsCollector::transformProgram() {
 
   // First, open original file for reading, and modified file for writing.
   std::ifstream originalProgram(filename);
-  std::ofstream modifiedProgram(std::string(OUT_DIR + filename + ".modified"));
+  std::ofstream modifiedProgram(MODIFIED_PROGAM_OUT);
 
   // Check files opened successfully
   if (originalProgram.good() && modifiedProgram.good()) {
 
     // First write the header to the output file
     modifiedProgram << TRANSFORM_HEADER;
+
+    // Insert branch declarations
+    insertBranchPointDeclarations(modifiedProgram);
 
     // Iterate through lines of original
 
@@ -332,21 +335,28 @@ void KeyPointsCollector::transformProgram() {
 
     // Containers for current line and new lines
     std::string currentLine;
-    std::vector<std::string> newLines;
 
     // Get ref to branch dictionary
     std::map<unsigned, std::map<unsigned, std::string>> branchDict =
         getBranchDictionary();
 
+    // Keep track of line branch point line numbers that have been encountered.
+    std::vector<unsigned> foundPoints;
+
     while (getline(originalProgram, currentLine)) {
 
-      // We found a branch point group, define a macro for this group
       if (branchDict.find(lineNum) != branchDict.end()) {
-        // Get targets for branch point.
-        std::map<unsigned, std::string> targets = branchDict[lineNum];
+        modifiedProgram << SET_BRANCH(foundPoints.size());
+        foundPoints.push_back(lineNum);
       }
+      // Write line
+      modifiedProgram << WRITE_LINE(currentLine);
       lineNum++;
     }
+
+    // Close files
+    originalProgram.close();
+    modifiedProgram.close();
 
   } else {
     std::cerr << "Error opening program files for transformation!" << std::endl;
@@ -354,10 +364,21 @@ void KeyPointsCollector::transformProgram() {
   }
 }
 
-void KeyPointsCollector::invokeValgrind() {
+void KeyPointsCollector::insertBranchPointDeclarations(std::ofstream &program) {
 
-  // First, we need to compile the code we just parsed into an executable.
+  // Get branch dict ref
+  const std::map<unsigned, std::map<unsigned, std::string>> &branchDict =
+      getBranchDictionary();
 
+  unsigned branch_num = 0;
+  for (const std::pair<unsigned, std::map<unsigned, std::string>> &BP :
+       branchDict) {
+    program << DECLARE_BRANCH(branch_num++);
+  }
+  program << std::endl;
+}
+
+void KeyPointsCollector::compileModified() {
   // See what compiler we are working with on the machine.
   std::string c_compiler;
 #if defined(__clang__)
@@ -374,24 +395,34 @@ void KeyPointsCollector::invokeValgrind() {
   }
   std::cout << "C compiler is: " << c_compiler << std::endl;
 
+  // Ensure that the modified program exists
+  if (!static_cast<bool>(std::ifstream(MODIFIED_PROGAM_OUT).good())) {
+    std::cerr << "Transformed program has not been created yet!" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
   // Construct compilation command.
   std::stringstream compilationCommand;
-  compilationCommand << c_compiler << " " << filename << " -o " << EXE_OUT;
+  compilationCommand << c_compiler << " " << MODIFIED_PROGAM_OUT << " -o "
+                     << EXE_OUT;
 
   // Compile
   bool compiled = static_cast<bool>(system(compilationCommand.str().c_str()));
 
   // Check if compiled properly
   if (compiled == EXIT_SUCCESS) {
-    std::remove(EXE_OUT);
+    std::remove(MODIFIED_PROGAM_OUT.c_str());
   } else {
     std::cerr << "There was an error with compilation, exiting!" << std::endl;
     exit(EXIT_FAILURE);
   }
 }
 
+void KeyPointsCollector::invokeValgrind() {}
+
 void KeyPointsCollector::executeToolchain() {
   collectCursors();
   createDictionaryFile();
   transformProgram();
+  /* compileModified(); */
 }

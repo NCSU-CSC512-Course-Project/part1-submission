@@ -193,8 +193,17 @@ public:
   // Creates dictionary file of branch points.
   void createDictionaryFile();
 
-  // Performs the transformation of the program so it can be compiled.
+  // Performs the transformation of the program so it can be compiled with
+  // branch statements.
   void transformProgram();
+
+  // Iterates through the branch points and declares a flag for each one at the
+  // top of the program: e.g int br_1 = 0
+  void insertBranchPointDeclarations(std::ofstream &program);
+
+  // Once the transformed program has been created, compile it with system C
+  // compiler.
+  void compileModified();
 
   // Invokes Valgrind through system calls and constructs output.
   void invokeValgrind();
