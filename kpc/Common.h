@@ -8,7 +8,7 @@
 // File system output
 #define OUT_DIR "out/"
 #define EXE_OUT std::string(OUT_DIR + filename + ".out")
-#define MODIFIED_PROGAM_OUT std::string(OUT_DIR + filename + ".modified")
+#define MODIFIED_PROGAM_OUT std::string(OUT_DIR + filename + ".modified.c")
 
 // Transforms
 #define TRANSFORM_HEADER                                                       \

@@ -424,5 +424,5 @@ void KeyPointsCollector::executeToolchain() {
   collectCursors();
   createDictionaryFile();
   transformProgram();
-  /* compileModified(); */
+  compileModified();
 }
