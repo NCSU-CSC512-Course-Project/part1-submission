@@ -242,6 +242,7 @@ CXChildVisitResult KeyPointsCollector::VisitFuncDecl(CXCursor current,
       std::cout << "Found FuncDecl: " << funcName << " at line # "
                 << funcDeclLineNum << '\n';
     }
+    // Get end of the function definition
     instance->addFuncDeclToMap(funcName, funcDeclLineNum);
   }
   clang_disposeTokens(instance->getTU(), funcDeclToken, 1);
@@ -480,9 +481,9 @@ void KeyPointsCollector::insertBranchPointDeclarations(std::ofstream &program) {
 void KeyPointsCollector::compileModified() {
   // See what compiler we are working with on the machine.
 #if defined(__clang__)
-  std::string c_compiler = "clang";
+  std::string c_compiler("clang");
 #elif defined(__GNUC__)
-  std::string c_compiler = "gcc";
+  std::string c_compiler("gcc");
 #endif
   if (c_compiler.empty()) {
     c_compiler = std::getenv("CC");
@@ -526,5 +527,5 @@ void KeyPointsCollector::executeToolchain() {
   compileModified();
   std::cout << "\nToolchain was successful, the branch dicitonary, modified "
                "file, and executable have been written to the "
-            << OUT_DIR << "directory \n";
+            << OUT_DIR << " directory \n";
 }

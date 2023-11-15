@@ -66,6 +66,22 @@ class KeyPointsCollector {
   static CXChildVisitResult VisitVarDecl(CXCursor current, CXCursor parent,
                                          CXClientData kps);
 
+  // Map of function names mapped to their definition location
+  std::map<std::string, unsigned> functionDecls;
+
+  // Adds a found function declaration to the map
+  void addFuncDeclToMap(const std::string name, unsigned lineNum) {
+    functionDecls[name] = lineNum;
+  }
+
+  // Map of variable names (VarDecls) mapped to their declaration location
+  std::map<std::string, unsigned> varDecls;
+
+  // Adds a found varable declaration to the map
+  void addVarDeclToMap(const std::string name, unsigned lineNum) {
+    varDecls[name] = lineNum;
+  }
+
   struct BranchPointInfo {
     unsigned branchPoint;
     std::vector<unsigned> targetLineNumbers;
@@ -94,22 +110,6 @@ class KeyPointsCollector {
 
   // Vector of completed branch points
   std::vector<BranchPointInfo> branchPoints;
-
-  // Map of function names mapped to their definition location
-  std::map<std::string, unsigned> functionDecls;
-
-  // Adds a found function declaration to the map
-  void addFuncDeclToMap(const std::string name, unsigned lineNum) {
-    functionDecls[name] = lineNum;
-  }
-
-  // Map of variable names (VarDecls) mapped to their declaration location
-  std::map<std::string, unsigned> varDecls;
-
-  // Adds a found varable declaration to the map
-  void addVarDeclToMap(const std::string name, unsigned lineNum) {
-    varDecls[name] = lineNum;
-  }
 
   // Push a new BP onto the stack
   void pushNewBranchPoint() { branchPointStack.push(BranchPointInfo()); }
