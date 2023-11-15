@@ -23,12 +23,12 @@ KeyPointsCollector::KeyPointsCollector(const std::string &filename, bool debug)
                                    nullptr, 0, CXTranslationUnit_None);
     // Check if parsed properly
     if (translationUnit == nullptr) {
-      std::cerr << "There was an error parsing the translation unit! Exiting..."
-                << std::endl;
+      std::cerr
+          << "There was an error parsing the translation unit! Exiting...\n";
       exit(EXIT_FAILURE);
     }
     std::cout << "Translation unit for file: " << filename
-              << " successfully parsed." << std::endl;
+              << " successfully parsed.\n";
 
     // Init cursor and branch count
     rootCursor = clang_getTranslationUnitCursor(translationUnit);
@@ -39,7 +39,7 @@ KeyPointsCollector::KeyPointsCollector(const std::string &filename, bool debug)
   } else {
 
     std::cerr << "File with name: " << filename
-              << ", does not exist! Exiting..." << std::endl;
+              << ", does not exist! Exiting...\n";
     exit(EXIT_FAILURE);
   }
 }
@@ -159,9 +159,8 @@ CXChildVisitResult KeyPointsCollector::VisitCompoundStmt(CXCursor current,
   const CXCursorKind currKind = clang_getCursorKind(current);
   const CXCursorKind parrKind = clang_getCursorKind(parent);
   if (parrKind != CXCursor_CompoundStmt) {
-    std::cerr
-        << "Compound statement visitor called when cursor is not compound stmt!"
-        << std::endl;
+    std::cerr << "Compound statement visitor called when cursor is not "
+                 "compound stmt!\n";
     exit(EXIT_FAILURE);
   }
   // Get line number of first child
@@ -210,7 +209,7 @@ CXChildVisitResult KeyPointsCollector::VisitVarDecl(CXCursor current,
   if (varMap.find(varName) == varMap.end()) {
     if (instance->debug) {
       std::cout << "Found VarDecl: " << varName << " at line # "
-                << varDeclLineNum << std::endl;
+                << varDeclLineNum << '\n';
     }
     instance->addVarDeclToMap(varName, varDeclLineNum);
   }
@@ -241,7 +240,7 @@ CXChildVisitResult KeyPointsCollector::VisitFuncDecl(CXCursor current,
   if (funcMap.find(funcName) == funcMap.end()) {
     if (instance->debug) {
       std::cout << "Found FuncDecl: " << funcName << " at line # "
-                << funcDeclLineNum << std::endl;
+                << funcDeclLineNum << '\n';
     }
     instance->addFuncDeclToMap(funcName, funcDeclLineNum);
   }
@@ -258,28 +257,27 @@ void KeyPointsCollector::collectCursors() {
 
 void KeyPointsCollector::printFoundBranchPoint(const CXCursorKind K) {
   std::cout << "Found branch point: " << CXSTR(clang_getCursorKindSpelling(K))
-            << " at line#: " << getCurrentBranch()->branchPoint << std::endl;
+            << " at line#: " << getCurrentBranch()->branchPoint << '\n';
 }
 
 void KeyPointsCollector::printFoundTargetPoint() {
   BranchPointInfo *currentBranch = getCurrentBranch();
   std::cout << "Found target for line branch #: " << currentBranch->branchPoint
-            << " at line#: " << currentBranch->targetLineNumbers.back()
-            << std::endl;
+            << " at line#: " << currentBranch->targetLineNumbers.back() << '\n';
 }
 
 void KeyPointsCollector::printCursorKind(const CXCursorKind K) {
   std::cout << "Found cursor: " << CXSTR(clang_getCursorKindSpelling(K))
-            << std::endl;
+            << '\n';
 }
 
 void KeyPointsCollector::createDictionaryFile() {
 
   // Open new file for the dicitonary.
   std::ofstream dictFile(std::string(OUT_DIR + filename + ".branch_dict"));
-  dictFile << "Branch Dictionary for: " << filename << std::endl;
+  dictFile << "Branch Dictionary for: " << filename << '\n';
   dictFile << "-----------------------" << std::string(filename.size(), '-')
-           << std::endl;
+           << '\n';
 
   // Get branch dict ref
   const std::map<unsigned, std::map<unsigned, std::string>> &branchDict =
@@ -290,7 +288,7 @@ void KeyPointsCollector::createDictionaryFile() {
        branchDict) {
     for (const std::pair<unsigned, std::string> &targets : BP.second) {
       dictFile << targets.second << ": " << filename << ", " << BP.first << ", "
-               << targets.first << std::endl;
+               << targets.first << '\n';
     }
   }
 
@@ -328,8 +326,6 @@ void KeyPointsCollector::transformProgram() {
     // Insert branch declarations
     insertBranchPointDeclarations(modifiedProgram);
 
-    // Iterate through lines of original
-
     // Keep track of line numbers
     unsigned lineNum = 1;
 
@@ -343,12 +339,115 @@ void KeyPointsCollector::transformProgram() {
     // Keep track of line branch point line numbers that have been encountered.
     std::vector<unsigned> foundPoints;
 
+    // Core iteration over original program
     while (getline(originalProgram, currentLine)) {
 
-      if (branchDict.find(lineNum) != branchDict.end()) {
+      // If the previous line was a branch point, set the branch
+      if (MAP_FIND(branchDict, lineNum - 1)) {
         modifiedProgram << SET_BRANCH(foundPoints.size());
-        foundPoints.push_back(lineNum);
+        foundPoints.push_back(lineNum - 1);
       }
+
+      // Iterate over found branch points and look for targets
+
+      // This vector holds not the location of the branch point, but the INDEX
+      // of the branches location in the foundPoints vector above. This is done
+      // as the index is how we access BRANCH_X in the transformed program.
+      std::vector<unsigned> foundPointsIdxCurrentLine;
+
+      if (!foundPoints.empty()) {
+        for (int idx = foundPoints.size() - 1; idx >= 0; --idx) {
+
+          // Get targets for BP
+          std::map<unsigned, std::string> targets =
+              branchDict[foundPoints[idx]];
+
+          // If target exists for any branch point, add to list for the current
+          // line number.
+          if (MAP_FIND(targets, lineNum)) {
+            foundPointsIdxCurrentLine.push_back(idx);
+          }
+        }
+      }
+
+      // After targets are found, insert proper logging logic into modified
+      // program.
+      switch (foundPointsIdxCurrentLine.size()) {
+        // None? Get outta there.
+      case 0:
+        break;
+      // If only one target for the line number, check to see if all successive
+      // branch points have NOT been set, this prevents unecessary logging after
+      // the exit of something like an if block. e.g if the target is from
+      // BRANCH_0,  ensure that BRANCH_1...BRANCH_N arent set = 1;
+      case 1: {
+        // If branch actually has successive points, then construct a
+        // conditional.
+        if (foundPointsIdxCurrentLine[0] + 1 < branchDict.size()) {
+          modifiedProgram << "if (";
+          for (int successive = foundPointsIdxCurrentLine[0] + 1;
+               successive < branchDict.size(); successive++) {
+            modifiedProgram << "!BRANCH_" << successive;
+            if (branchDict.size() - successive > 1)
+              modifiedProgram << " && ";
+          }
+          modifiedProgram
+              << ") LOG(\""
+              << branchDict[foundPoints[foundPointsIdxCurrentLine[0]]][lineNum]
+              << "\");";
+        }
+        // If not, just log it.
+        else {
+          modifiedProgram
+              << "LOG(\""
+              << branchDict[foundPoints[foundPointsIdxCurrentLine[0]]][lineNum]
+              << "\");";
+        }
+        break;
+      }
+      // If two targets for the current line number, we can insert a simple if
+      // else block
+      case 2: {
+        modifiedProgram
+            << "if (BRANCH_" << foundPointsIdxCurrentLine[0] << ") {LOG(\""
+            << branchDict[foundPoints[foundPointsIdxCurrentLine[0]]][lineNum]
+            << "\")} else {LOG(\""
+            << branchDict[foundPoints[foundPointsIdxCurrentLine[1]]][lineNum]
+            << "\")}";
+        break;
+      }
+      // Default is more than 2, in this case, we need to insert a proper if,
+      // else if, else chain for all the targets available for the current line
+      // number.
+      default: {
+        // Insert initial if block
+        modifiedProgram
+            << "if (BRANCH_" << foundPointsIdxCurrentLine[0] << ") {LOG(\""
+            << branchDict[foundPoints[foundPointsIdxCurrentLine[0]]][lineNum]
+            << "\")}";
+
+        // Insert else if blocks for all branches before the last.
+        for (int successive = 1;
+             successive < foundPointsIdxCurrentLine.size() - 1; successive++) {
+          modifiedProgram
+              << " else if (BRANCH_" << foundPointsIdxCurrentLine[successive]
+              << ") {LOG(\""
+              << branchDict[foundPoints[foundPointsIdxCurrentLine[successive]]]
+                           [lineNum]
+              << "\")}";
+        }
+
+        // Insert final else for the last branch point.
+        modifiedProgram
+            << "else {LOG(\""
+            << branchDict[foundPoints[foundPointsIdxCurrentLine
+                                          [foundPointsIdxCurrentLine.size() -
+                                           1]]][lineNum]
+            << "\")}";
+
+      } break;
+      }
+
       // Write line
       modifiedProgram << WRITE_LINE(currentLine);
       lineNum++;
@@ -359,7 +458,7 @@ void KeyPointsCollector::transformProgram() {
     modifiedProgram.close();
 
   } else {
-    std::cerr << "Error opening program files for transformation!" << std::endl;
+    std::cerr << "Error opening program files for transformation!\n";
     exit(EXIT_FAILURE);
   }
 }
@@ -375,29 +474,28 @@ void KeyPointsCollector::insertBranchPointDeclarations(std::ofstream &program) {
        branchDict) {
     program << DECLARE_BRANCH(branch_num++);
   }
-  program << std::endl;
+  program << '\n';
 }
 
 void KeyPointsCollector::compileModified() {
   // See what compiler we are working with on the machine.
-  std::string c_compiler;
 #if defined(__clang__)
-  c_compiler = "clang";
+  std::string c_compiler = "clang";
 #elif defined(__GNUC__)
-  c_compiler = "gcc";
+  std::string c_compiler = "gcc";
 #endif
   if (c_compiler.empty()) {
     c_compiler = std::getenv("CC");
     if (c_compiler.empty()) {
-      std::cerr << "No viable C compiler found on system!" << std::endl;
+      std::cerr << "No viable C compiler found on system!\n";
       exit(EXIT_FAILURE);
     }
   }
-  std::cout << "C compiler is: " << c_compiler << std::endl;
+  std::cout << "C compiler is: " << c_compiler << '\n';
 
   // Ensure that the modified program exists
   if (!static_cast<bool>(std::ifstream(MODIFIED_PROGAM_OUT).good())) {
-    std::cerr << "Transformed program has not been created yet!" << std::endl;
+    std::cerr << "Transformed program has not been created yet!\n";
     exit(EXIT_FAILURE);
   }
 
@@ -411,9 +509,10 @@ void KeyPointsCollector::compileModified() {
 
   // Check if compiled properly
   if (compiled == EXIT_SUCCESS) {
-    std::remove(MODIFIED_PROGAM_OUT.c_str());
+    /* std::remove(EXE_OUT.c_str()); */
+    std::cout << "Compilation Successful" << '\n';
   } else {
-    std::cerr << "There was an error with compilation, exiting!" << std::endl;
+    std::cerr << "There was an error with compilation, exiting!\n";
     exit(EXIT_FAILURE);
   }
 }
@@ -425,4 +524,7 @@ void KeyPointsCollector::executeToolchain() {
   createDictionaryFile();
   transformProgram();
   compileModified();
+  std::cout << "\nToolchain was successful, the branch dicitonary, modified "
+               "file, and executable have been written to the "
+            << OUT_DIR << "directory \n";
 }

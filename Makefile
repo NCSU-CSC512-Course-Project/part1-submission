@@ -19,7 +19,10 @@ EXE = $(BIN_DIR)/kpc
 
 all: dirs main
 
-run: all
+clean_out:
+	rm -f $(OUT_DIR)/*
+
+run: clean_out all
 	$(EXE) test_file.c
 
 drun: all
