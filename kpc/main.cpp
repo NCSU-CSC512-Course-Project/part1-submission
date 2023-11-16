@@ -7,7 +7,6 @@
 #include <iostream>
 
 int main(int argc, char *argv[]) {
-  ;
 
   // Check a filename was passed
   assert(argc > 1 && "Must provide a file name as an argument!");

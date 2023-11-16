@@ -8,6 +8,7 @@
 
 #include <iostream>
 #include <map>
+#include <memory>
 #include <stack>
 #include <string>
 #include <vector>
@@ -66,13 +67,29 @@ class KeyPointsCollector {
   static CXChildVisitResult VisitVarDecl(CXCursor current, CXCursor parent,
                                          CXClientData kps);
 
-  // Map of function names mapped to their definition location
-  std::map<std::string, unsigned> functionDecls;
+  // Struct to hold information about a function
+  struct FunctionDeclInfo {
+    // Location of function defintion and the end of its body
+    unsigned defLoc;
+    unsigned endLoc;
+    // Function name
+    const std::string name;
 
-  // Adds a found function declaration to the map
-  void addFuncDeclToMap(const std::string name, unsigned lineNum) {
-    functionDecls[name] = lineNum;
+    FunctionDeclInfo(unsigned defLoc, unsigned endLoc, const std::string &name)
+        : defLoc(defLoc), endLoc(endLoc), name(std::move(name)) {}
+  };
+
+  // Add func decl to map.
+  void addFuncDecl(unsigned defLoc, std::unique_ptr<FunctionDeclInfo> decl) {
+    funcDecls[defLoc] = std::move(decl);
   }
+
+  // Functions are stored being mapped from their definition line number to
+  // their respective structs.
+  std::map<unsigned, std::unique_ptr<FunctionDeclInfo>> funcDecls;
+
+  // Map of line numbers mapped to the function being called
+  std::map<unsigned, std::string> functionCalls;
 
   // Map of variable names (VarDecls) mapped to their declaration location
   std::map<std::string, unsigned> varDecls;
@@ -169,8 +186,9 @@ public:
   const std::vector<CXCursor> &getCursorObjs() const { return cursorObjs; }
 
   // Returns a reference to map of function defintions
-  const std::map<std::string, unsigned> &getFuncDecls() const {
-    return functionDecls;
+  const std::map<unsigned, std::unique_ptr<FunctionDeclInfo>> &
+  getFuncDecls() const {
+    return funcDecls;
   }
   //
   // Returns a reference to map of variable defintions

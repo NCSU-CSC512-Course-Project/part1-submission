@@ -1,4 +1,9 @@
-int add(int a, int b) { return a + b; }
+int add(int a, int b) {
+  if (a > 0 && b > 0) {
+    return a + b;
+  }
+  return 0;
+}
 
 int main(void) {
   int (*add_ptr)(int, int) = &add;

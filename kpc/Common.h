@@ -15,7 +15,8 @@
 
 // Transforms
 #define TRANSFORM_HEADER                                                       \
-  "#include <stdio.h>\n#define LOG(BP) printf(\"%s\\n\", BP);\n"
+  "#include <stdio.h>\n#define LOG(BP) printf(\"%s\\n\", BP);\n#define "       \
+  "LOG_PTR(PTR) printf(\"func_%p\\n\", PTR);\n"
 
 #define DECLARE_BRANCH(BRANCH) "int BRANCH_" << BRANCH << " = 0;\n"
 #define SET_BRANCH(BRANCH) "BRANCH_" << BRANCH << " = 1;\n"

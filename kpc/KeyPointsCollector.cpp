@@ -140,7 +140,7 @@ CXChildVisitResult KeyPointsCollector::VisitorFunctionCore(CXCursor current,
 
   // If check to see if it is a FuncDecl
   if (currKind == CXCursor_FunctionDecl) {
-    clang_visitChildren(parent, &KeyPointsCollector::VisitFuncDecl, kpc);
+    clang_visitChildren(current, &KeyPointsCollector::VisitFuncDecl, kpc);
   }
 
   // If check to see if it is a VarDecl
@@ -222,30 +222,34 @@ CXChildVisitResult KeyPointsCollector::VisitFuncDecl(CXCursor current,
                                                      CXClientData kpc) {
   KeyPointsCollector *instance = static_cast<KeyPointsCollector *>(kpc);
 
-  // First retrive the line number
-  unsigned funcDeclLineNum;
-  CXSourceLocation funcDeclLoc = clang_getCursorLocation(current);
-  clang_getSpellingLocation(funcDeclLoc, instance->getCXFile(),
-                            &funcDeclLineNum, nullptr, nullptr);
+  // Get beginning, end, and name
+  if (clang_getCursorKind(parent) == CXCursor_FunctionDecl) {
+    // Extent
+    unsigned begLineNum, endLineNum;
+    CXSourceRange funcRange = clang_getCursorExtent(parent);
+    CXSourceLocation funcBeg = clang_getRangeStart(funcRange);
+    CXSourceLocation funcEnd = clang_getRangeEnd(funcRange);
+    clang_getSpellingLocation(funcBeg, instance->getCXFile(), &begLineNum,
+                              nullptr, nullptr);
+    clang_getSpellingLocation(funcBeg, instance->getCXFile(), &endLineNum,
+                              nullptr, nullptr);
 
-  // Get token and its spelling
-  CXToken *funcDeclToken = clang_getToken(instance->getTU(), funcDeclLoc);
-  std::string funcName =
-      CXSTR(clang_getTokenSpelling(instance->getTU(), *funcDeclToken));
+    // Get name
+    CXToken *funcDeclToken =
+        clang_getToken(instance->getTU(), clang_getCursorLocation(parent));
+    std::string funcName =
+        CXSTR(clang_getTokenSpelling(instance->getTU(), *funcDeclToken));
 
-  // Get reference to map for checking
-  std::map<std::string, unsigned> funcMap = instance->getFuncDecls();
-
-  // Add to map of FuncDecls
-  if (funcMap.find(funcName) == funcMap.end()) {
+    // Add to map
+    instance->addFuncDecl(begLineNum, std::make_unique<FunctionDeclInfo>(
+                                          begLineNum, endLineNum, funcName));
     if (instance->debug) {
-      std::cout << "Found FuncDecl: " << funcName << " at line # "
-                << funcDeclLineNum << '\n';
+      std::cout << "Found FunctionDecl: " << funcName
+                << " on line #: " << begLineNum << '\n';
     }
-    // Get end of the function definition
-    instance->addFuncDeclToMap(funcName, funcDeclLineNum);
+    clang_disposeTokens(instance->getTU(), funcDeclToken, 1);
   }
-  clang_disposeTokens(instance->getTU(), funcDeclToken, 1);
+
   return CXChildVisit_Break;
 }
 
