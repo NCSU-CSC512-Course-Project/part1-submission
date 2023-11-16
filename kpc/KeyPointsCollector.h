@@ -4,6 +4,7 @@
 #ifndef KEY_POINTS_COLLECTOR__H
 #define KEY_POINTS_COLLECTOR__H
 
+#include "Common.h"
 #include <clang-c/Index.h>
 
 #include <iostream>
@@ -83,17 +84,34 @@ class KeyPointsCollector {
           type(std::move(type)) {}
   };
 
-  // Add func decl to map.
-  void addFuncDecl(unsigned defLoc, std::shared_ptr<FunctionDeclInfo> decl) {
-    funcDecls[defLoc] = std::move(decl);
+  // Add func decl to maps.
+  void addFuncDecl(std::shared_ptr<FunctionDeclInfo> decl) {
+    funcDecls[decl->defLoc] = decl;
+    funcDeclsString[decl->name] = decl;
   }
 
   // Functions are stored being mapped from their definition line number to
   // their respective structs.
   std::map<unsigned, std::shared_ptr<FunctionDeclInfo>> funcDecls;
 
+  // Additional map for function lookup by name
+  std::map<std::string, std::shared_ptr<FunctionDeclInfo>> funcDeclsString;
+  //
+  // Function getter by string
+  std::shared_ptr<FunctionDeclInfo> getFunctionByName(const std::string &name) {
+    if (MAP_FIND(funcDeclsString, name)) {
+      return funcDeclsString[name];
+    }
+    return nullptr;
+  }
+
   // Map of line numbers mapped to the function being called
   std::map<unsigned, std::string> functionCalls;
+
+  // Add a call to the call map
+  void addCall(unsigned lineNum, const std::string &calleeName) {
+    functionCalls[lineNum] = calleeName;
+  }
 
   // Map of variable names (VarDecls) mapped to their declaration location
   std::map<std::string, unsigned> varDecls;
@@ -194,7 +212,12 @@ public:
   getFuncDecls() const {
     return funcDecls;
   }
-  //
+
+  // Returns a reference the map of known function calls.
+  const std::map<unsigned, std::string> &getFuncCalls() const {
+    return functionCalls;
+  }
+
   // Returns a reference to map of variable defintions
   const std::map<std::string, unsigned> &getVarDecls() const {
     return varDecls;

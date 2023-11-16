@@ -5,6 +5,7 @@
 
 #define CXSTR(X) clang_getCString(X)
 #define QKDBG(OUT) std::cout << OUT << '\n';
+#define QKCURSDBG(OUT) std::cout << CXSTR(clang_getCursorKindSpelling(OUT)) << std::endl;
 
 // File system output
 #define OUT_DIR "out/"
@@ -23,4 +24,4 @@
 #define WRITE_LINE(LINE) LINE << '\n';
 
 #define DECLARE_FUNC_PTR(FUNC)                                                 \
-  FUNC->type << " *" << FUNC->name << "_ptr = &" << FUNC->name << ";\n"
+  FUNC->type << " *" << FUNC->name << "_PTR = &" << FUNC->name << ";\n"

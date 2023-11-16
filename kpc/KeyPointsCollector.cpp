@@ -94,7 +94,7 @@ CXChildVisitResult KeyPointsCollector::VisitorFunctionCore(CXCursor current,
   const CXCursorKind parrKind = clang_getCursorKind(parent);
 
   // If it is a call expression, recurse on children with special visitor
-  if (currKind == CXCursor_DeclRefExpr) {
+  if (currKind == CXCursor_CallExpr) {
     clang_visitChildren(parent, &KeyPointsCollector::VisitCallExpr, kpc);
     return CXChildVisit_Continue;
   }
@@ -145,7 +145,6 @@ CXChildVisitResult KeyPointsCollector::VisitorFunctionCore(CXCursor current,
   // If check to see if it is a VarDecl
   if (currKind == CXCursor_VarDecl) {
     clang_visitChildren(parent, &KeyPointsCollector::VisitVarDecl, kpc);
-    return CXChildVisit_Continue;
   }
 
   return CXChildVisit_Recurse;
@@ -182,13 +181,18 @@ CXChildVisitResult KeyPointsCollector::VisitCallExpr(CXCursor current,
   KeyPointsCollector *instance = static_cast<KeyPointsCollector *>(kpc);
 
   CXSourceLocation callExprLoc = clang_getCursorLocation(current);
+  CXToken *calleeNameTok = clang_getToken(instance->getTU(), callExprLoc);
+  std::string tokenName =
+      CXSTR(clang_getTokenSpelling(instance->getTU(), *calleeNameTok));
 
-  // Get token and its spelling
-  CXToken *varDeclToken = clang_getToken(instance->getTU(), callExprLoc);
-  std::string callee =
-      CXSTR(clang_getTokenSpelling(instance->getTU(), *varDeclToken));
-  QKDBG("TESTING");
-  QKDBG(callee);
+  if (instance->getFunctionByName(tokenName) != nullptr) {
+    unsigned callLocLine;
+    clang_getSpellingLocation(callExprLoc, instance->getCXFile(), &callLocLine,
+                              nullptr, nullptr);
+    instance->addCall(callLocLine, tokenName);
+    clang_disposeTokens(instance->getTU(), calleeNameTok, 1);
+    return CXChildVisit_Break;
+  }
 
   return CXChildVisit_Recurse;
 }
@@ -251,10 +255,9 @@ CXChildVisitResult KeyPointsCollector::VisitFuncDecl(CXCursor current,
         CXSTR(clang_getTokenSpelling(instance->getTU(), *funcDeclToken));
 
     // Add to map
-    instance->addFuncDecl(begLineNum,
-                          std::make_shared<FunctionDeclInfo>(
-                              begLineNum, endLineNum, funcName,
-                              clang_getCString(funcReturnTypeSpelling)));
+    instance->addFuncDecl(std::make_shared<FunctionDeclInfo>(
+        begLineNum, endLineNum, funcName,
+        clang_getCString(funcReturnTypeSpelling)));
     if (instance->debug) {
       std::cout << "Found FunctionDecl: " << funcName << " of return type: "
                 << clang_getCString(funcReturnTypeSpelling)
@@ -269,8 +272,6 @@ CXChildVisitResult KeyPointsCollector::VisitFuncDecl(CXCursor current,
 
 void KeyPointsCollector::collectCursors() {
   clang_visitChildren(rootCursor, this->VisitorFunctionCore, this);
-  // Reverse BP list as they were popped in reverse order
-  std::reverse(branchPoints.begin(), branchPoints.end());
   addBranchesToDictionary();
 }
 
@@ -357,6 +358,9 @@ void KeyPointsCollector::transformProgram() {
     // Get ref to function decls
     std::map<unsigned, std::shared_ptr<FunctionDeclInfo>> funcDecls =
         getFuncDecls();
+
+    // Get Ref to function calls.
+    std::map<unsigned, std::string> funcCalls = getFuncCalls();
 
     // Get ref to branch dictionary
     std::map<unsigned, std::map<unsigned, std::string>> branchDict =
@@ -491,6 +495,14 @@ void KeyPointsCollector::transformProgram() {
             << "\")}";
 
       } break;
+      }
+
+      // Check to see if we encountered a call expr last. If branch target and
+      // call on the same line, it seems more intuitive for the branch log to
+      // come before the function log. e.g br_here THEN call func_0x1010101010.
+      if (MAP_FIND(funcCalls, lineNum)) {
+        modifiedProgram << "LOG_PTR(" << funcCalls[lineNum] << "_PTR"
+                        << ");\n";
       }
 
       // Write line
