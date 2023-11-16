@@ -93,10 +93,9 @@ CXChildVisitResult KeyPointsCollector::VisitorFunctionCore(CXCursor current,
   const CXCursorKind currKind = clang_getCursorKind(current);
   const CXCursorKind parrKind = clang_getCursorKind(parent);
 
-  // If it is a call expression, recurse on children with special visitor. NEEDS
-  // FURTHER IMPLEMENTATION
-  if (currKind == CXCursor_CallExpr) {
-    clang_visitChildren(current, &KeyPointsCollector::VisitCallExpr, kpc);
+  // If it is a call expression, recurse on children with special visitor
+  if (currKind == CXCursor_DeclRefExpr) {
+    clang_visitChildren(parent, &KeyPointsCollector::VisitCallExpr, kpc);
     return CXChildVisit_Continue;
   }
 
@@ -181,8 +180,16 @@ CXChildVisitResult KeyPointsCollector::VisitCallExpr(CXCursor current,
                                                      CXCursor parent,
                                                      CXClientData kpc) {
   KeyPointsCollector *instance = static_cast<KeyPointsCollector *>(kpc);
-  const CXCursorKind currKind = clang_getCursorKind(current);
-  const CXCursorKind parrKind = clang_getCursorKind(parent);
+
+  CXSourceLocation callExprLoc = clang_getCursorLocation(current);
+
+  // Get token and its spelling
+  CXToken *varDeclToken = clang_getToken(instance->getTU(), callExprLoc);
+  std::string callee =
+      CXSTR(clang_getTokenSpelling(instance->getTU(), *varDeclToken));
+  QKDBG("TESTING");
+  QKDBG(callee);
+
   return CXChildVisit_Recurse;
 }
 
@@ -222,8 +229,11 @@ CXChildVisitResult KeyPointsCollector::VisitFuncDecl(CXCursor current,
                                                      CXClientData kpc) {
   KeyPointsCollector *instance = static_cast<KeyPointsCollector *>(kpc);
 
-  // Get beginning, end, and name
+  // Get return type, beginning and end loc, and name.
   if (clang_getCursorKind(parent) == CXCursor_FunctionDecl) {
+    CXType funcReturnType = clang_getResultType(clang_getCursorType(parent));
+
+    CXString funcReturnTypeSpelling = clang_getTypeSpelling(funcReturnType);
     // Extent
     unsigned begLineNum, endLineNum;
     CXSourceRange funcRange = clang_getCursorExtent(parent);
@@ -231,7 +241,7 @@ CXChildVisitResult KeyPointsCollector::VisitFuncDecl(CXCursor current,
     CXSourceLocation funcEnd = clang_getRangeEnd(funcRange);
     clang_getSpellingLocation(funcBeg, instance->getCXFile(), &begLineNum,
                               nullptr, nullptr);
-    clang_getSpellingLocation(funcBeg, instance->getCXFile(), &endLineNum,
+    clang_getSpellingLocation(funcEnd, instance->getCXFile(), &endLineNum,
                               nullptr, nullptr);
 
     // Get name
@@ -241,13 +251,17 @@ CXChildVisitResult KeyPointsCollector::VisitFuncDecl(CXCursor current,
         CXSTR(clang_getTokenSpelling(instance->getTU(), *funcDeclToken));
 
     // Add to map
-    instance->addFuncDecl(begLineNum, std::make_unique<FunctionDeclInfo>(
-                                          begLineNum, endLineNum, funcName));
+    instance->addFuncDecl(begLineNum,
+                          std::make_shared<FunctionDeclInfo>(
+                              begLineNum, endLineNum, funcName,
+                              clang_getCString(funcReturnTypeSpelling)));
     if (instance->debug) {
-      std::cout << "Found FunctionDecl: " << funcName
+      std::cout << "Found FunctionDecl: " << funcName << " of return type: "
+                << clang_getCString(funcReturnTypeSpelling)
                 << " on line #: " << begLineNum << '\n';
     }
     clang_disposeTokens(instance->getTU(), funcDeclToken, 1);
+    clang_disposeString(funcReturnTypeSpelling);
   }
 
   return CXChildVisit_Break;
@@ -328,14 +342,21 @@ void KeyPointsCollector::transformProgram() {
     // First write the header to the output file
     modifiedProgram << TRANSFORM_HEADER;
 
-    // Insert branch declarations
-    insertBranchPointDeclarations(modifiedProgram);
-
     // Keep track of line numbers
     unsigned lineNum = 1;
 
     // Containers for current line and new lines
     std::string currentLine;
+
+    // Current function being analyzed
+    std::shared_ptr<FunctionDeclInfo> currentFunction = nullptr;
+
+    // Amount of branches within current function.
+    int branchCountCurrFunc;
+
+    // Get ref to function decls
+    std::map<unsigned, std::shared_ptr<FunctionDeclInfo>> funcDecls =
+        getFuncDecls();
 
     // Get ref to branch dictionary
     std::map<unsigned, std::map<unsigned, std::string>> branchDict =
@@ -346,6 +367,25 @@ void KeyPointsCollector::transformProgram() {
 
     // Core iteration over original program
     while (getline(originalProgram, currentLine)) {
+
+      // If previous line is a function def/decl, insert the branch points for
+      // that function and set current function.
+      if (MAP_FIND(funcDecls, lineNum - 1)) {
+        currentFunction = funcDecls[lineNum - 1];
+        foundPoints.clear();
+        branchCountCurrFunc = 0;
+        insertFunctionBranchPointDecls(modifiedProgram, currentFunction,
+                                       &branchCountCurrFunc);
+      }
+
+      // If we have a current function AND the previous line is the end of said
+      // function, create a pointer pointer for that function so we can access
+      // it for logging purposes. Also, the current function shouldn't be main.
+      if (currentFunction != nullptr &&
+          (lineNum - 1) == currentFunction->endLoc &&
+          currentFunction->name.compare("main")) {
+        modifiedProgram << DECLARE_FUNC_PTR(currentFunction);
+      }
 
       // If the previous line was a branch point, set the branch
       if (MAP_FIND(branchDict, lineNum - 1)) {
@@ -388,12 +428,12 @@ void KeyPointsCollector::transformProgram() {
       case 1: {
         // If branch actually has successive points, then construct a
         // conditional.
-        if (foundPointsIdxCurrentLine[0] + 1 < branchDict.size()) {
+        if (foundPointsIdxCurrentLine[0] + 1 < branchCountCurrFunc) {
           modifiedProgram << "if (";
           for (int successive = foundPointsIdxCurrentLine[0] + 1;
-               successive < branchDict.size(); successive++) {
+               successive < branchCountCurrFunc; successive++) {
             modifiedProgram << "!BRANCH_" << successive;
-            if (branchDict.size() - successive > 1)
+            if (branchCountCurrFunc - successive > 1)
               modifiedProgram << " && ";
           }
           modifiedProgram
@@ -468,16 +508,14 @@ void KeyPointsCollector::transformProgram() {
   }
 }
 
-void KeyPointsCollector::insertBranchPointDeclarations(std::ofstream &program) {
-
-  // Get branch dict ref
-  const std::map<unsigned, std::map<unsigned, std::string>> &branchDict =
-      getBranchDictionary();
-
-  unsigned branch_num = 0;
-  for (const std::pair<unsigned, std::map<unsigned, std::string>> &BP :
-       branchDict) {
-    program << DECLARE_BRANCH(branch_num++);
+void KeyPointsCollector::insertFunctionBranchPointDecls(
+    std::ofstream &program, std::shared_ptr<FunctionDeclInfo> function,
+    int *branchCount) {
+  // Iterate over range of function and check for branching points.
+  for (int lineNum = function->defLoc; lineNum < function->endLoc; lineNum++) {
+    if (MAP_FIND(getBranchDictionary(), lineNum)) {
+      program << DECLARE_BRANCH((*branchCount)++);
+    }
   }
   program << '\n';
 }

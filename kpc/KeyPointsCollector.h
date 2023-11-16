@@ -74,19 +74,23 @@ class KeyPointsCollector {
     unsigned endLoc;
     // Function name
     const std::string name;
+    // Return type of function
+    const std::string type;
 
-    FunctionDeclInfo(unsigned defLoc, unsigned endLoc, const std::string &name)
-        : defLoc(defLoc), endLoc(endLoc), name(std::move(name)) {}
+    FunctionDeclInfo(unsigned defLoc, unsigned endLoc, const std::string &name,
+                     const std::string &type)
+        : defLoc(defLoc), endLoc(endLoc), name(std::move(name)),
+          type(std::move(type)) {}
   };
 
   // Add func decl to map.
-  void addFuncDecl(unsigned defLoc, std::unique_ptr<FunctionDeclInfo> decl) {
+  void addFuncDecl(unsigned defLoc, std::shared_ptr<FunctionDeclInfo> decl) {
     funcDecls[defLoc] = std::move(decl);
   }
 
   // Functions are stored being mapped from their definition line number to
   // their respective structs.
-  std::map<unsigned, std::unique_ptr<FunctionDeclInfo>> funcDecls;
+  std::map<unsigned, std::shared_ptr<FunctionDeclInfo>> funcDecls;
 
   // Map of line numbers mapped to the function being called
   std::map<unsigned, std::string> functionCalls;
@@ -186,7 +190,7 @@ public:
   const std::vector<CXCursor> &getCursorObjs() const { return cursorObjs; }
 
   // Returns a reference to map of function defintions
-  const std::map<unsigned, std::unique_ptr<FunctionDeclInfo>> &
+  const std::map<unsigned, std::shared_ptr<FunctionDeclInfo>> &
   getFuncDecls() const {
     return funcDecls;
   }
@@ -217,7 +221,10 @@ public:
 
   // Iterates through the branch points and declares a flag for each one at the
   // top of the program: e.g int br_1 = 0
-  void insertBranchPointDeclarations(std::ofstream &program);
+  void
+  insertFunctionBranchPointDecls(std::ofstream &program,
+                                 std::shared_ptr<FunctionDeclInfo> function,
+                                 int *branchCount);
 
   // Once the transformed program has been created, compile it with system C
   // compiler.

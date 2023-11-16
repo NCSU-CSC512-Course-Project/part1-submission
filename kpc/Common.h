@@ -21,3 +21,6 @@
 #define DECLARE_BRANCH(BRANCH) "int BRANCH_" << BRANCH << " = 0;\n"
 #define SET_BRANCH(BRANCH) "BRANCH_" << BRANCH << " = 1;\n"
 #define WRITE_LINE(LINE) LINE << '\n';
+
+#define DECLARE_FUNC_PTR(FUNC)                                                 \
+  FUNC->type << " *" << FUNC->name << "_ptr = &" << FUNC->name << ";\n"
