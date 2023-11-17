@@ -391,12 +391,14 @@ void KeyPointsCollector::addCompletedBranch() {
 }
 
 void KeyPointsCollector::addBranchesToDictionary() {
-  for (const BranchPointInfo &branchPoint : branchPoints) {
+  for (std::vector<BranchPointInfo>::reverse_iterator branchPoint =
+           branchPoints.rbegin();
+       branchPoint != branchPoints.rend(); branchPoint++) {
     std::map<unsigned, std::string> targetsAndIds;
-    for (const unsigned &target : branchPoint.targetLineNumbers) {
+    for (const unsigned &target : branchPoint->targetLineNumbers) {
       targetsAndIds[target] = "br_" + std::to_string(++branchCount);
     }
-    branchDictionary[branchPoint.branchPoint] = targetsAndIds;
+    branchDictionary[branchPoint->branchPoint] = targetsAndIds;
   }
 }
 
