@@ -643,7 +643,9 @@ void KeyPointsCollector::compileModified() {
   }
 }
 
-void KeyPointsCollector::invokeValgrind() {}
+void KeyPointsCollector::invokeValgrind() {
+
+}
 
 void KeyPointsCollector::executeToolchain() {
   collectCursors();

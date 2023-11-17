@@ -221,6 +221,24 @@ class KeyPointsCollector {
   // recursively visit nodes and add to cursorObjs if they are of interest.
   void collectCursors();
 
+  // Creates dictionary file of branch points.
+  void createDictionaryFile();
+
+  // Iterates through the branch points and declares a flag for each one at the
+  // top of the program: e.g int br_1 = 0
+  void
+  insertFunctionBranchPointDecls(std::ofstream &program,
+                                 std::shared_ptr<FunctionDeclInfo> function,
+                                 int *branchCount);
+
+  // Once the transformed program has been created, compile it with system C
+  // compiler.
+  void compileModified();
+
+  // Performs the transformation of the program so it can be compiled with
+  // branch statements.
+  void transformProgram();
+
   // Runs all necessary functions for part 1
   void executeToolchain();
 
@@ -263,25 +281,8 @@ public:
     return branchDictionary;
   }
 
-  // Creates dictionary file of branch points.
-  void createDictionaryFile();
-
-  // Performs the transformation of the program so it can be compiled with
-  // branch statements.
-  void transformProgram();
-
-  // Iterates through the branch points and declares a flag for each one at the
-  // top of the program: e.g int br_1 = 0
-  void
-  insertFunctionBranchPointDecls(std::ofstream &program,
-                                 std::shared_ptr<FunctionDeclInfo> function,
-                                 int *branchCount);
-
-  // Once the transformed program has been created, compile it with system C
-  // compiler.
-  void compileModified();
-
-  // Invokes Valgrind through system calls and constructs output.
+  // Invokes Valgrind toolchain to analyze the original programs executed
+  // instructions.
   void invokeValgrind();
 };
 
