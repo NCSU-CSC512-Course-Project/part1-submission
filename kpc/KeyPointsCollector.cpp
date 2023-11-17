@@ -1,4 +1,4 @@
- // KeyPointsCollector.cpp
+// KeyPointsCollector.cpp
 // ~~~~~~~~~~~~~~~~~~~~~~
 // Implementation of KeyPointsCollector interface.
 #include "KeyPointsCollector.h"
@@ -7,11 +7,9 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
-   // Ctor Implementation
-    KeyPointsCollector::KeyPointsCollector(const std::string &filename,
-                                           bool debug)
-    : filename(std::move(filename)),
-debug(debug) {
+// Ctor Implementation
+KeyPointsCollector::KeyPointsCollector(const std::string &filename, bool debug)
+    : filename(std::move(filename)), debug(debug) {
 
   // Check if file exists
   std::ifstream file(filename);
@@ -650,10 +648,6 @@ void KeyPointsCollector::executeToolchain() {
   createDictionaryFile();
   transformProgram();
   compileModified();
-  for (const auto F : funcPtrs) {
-    QKDBG(F.first);
-    QKDBG(F.second);
-  }
   std::cout << "\nToolchain was successful, the branch dicitonary, modified "
                "file, and executable have been written to the "
             << OUT_DIR << " directory \n";
