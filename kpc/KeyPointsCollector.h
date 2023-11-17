@@ -62,11 +62,36 @@ class KeyPointsCollector {
 
   // Visitor for a FuncDecl, to collect name and defintion location.
   static CXChildVisitResult VisitFuncDecl(CXCursor current, CXCursor parent,
-                                          CXClientData kps);
+                                          CXClientData kpc);
 
   // Visitor for a VarDecl, to collect name and location
   static CXChildVisitResult VisitVarDecl(CXCursor current, CXCursor parent,
-                                         CXClientData kps);
+                                         CXClientData kpc);
+
+  // Visitor for a function pointer, just to extract the name of the function it
+  // is pointing to.
+  static CXChildVisitResult VisitFuncPtr(CXCursor current, CXCursor parent,
+                                         CXClientData kpc);
+
+  // Map of function pointers, their ids mapped to the name of the function they
+  // represent.
+  std::map<std::string, std::string> funcPtrs;
+
+  // Current func ptr id being looked at.
+  std::string currFuncPtrId;
+
+  // See if an Id maps to a function pointer
+  std::string isFunctionPtr(const std::string &id) {
+    if (MAP_FIND(funcPtrs, id)) {
+      return funcPtrs[id];
+    }
+    return nullptr;
+  }
+
+  // Add a function pointer to the map.
+  void addFuncPtr(const std::string &id, const std::string &func) {
+    funcPtrs[id] = func;
+  }
 
   // Struct to hold information about a function
   struct FunctionDeclInfo {
@@ -173,7 +198,10 @@ class KeyPointsCollector {
 
   // Checks to see if the current cursor is a point in the program
   // that could be a branch
-  bool isBranchPointOrFunctionPtr(const CXCursorKind K);
+  bool isBranchPointOrCallExpr(const CXCursorKind K);
+
+  // Checks to see if the current VarDecl is a function ptr;
+  bool isFunctionPtr(const CXCursor C);
 
   // Checks to see if the stack is empty to ensure we have found a
   // compound statement before checking against further children.

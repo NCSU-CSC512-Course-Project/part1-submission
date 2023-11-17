@@ -7,7 +7,6 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
-
 // Ctor Implementation
 KeyPointsCollector::KeyPointsCollector(const std::string &filename, bool debug)
     : filename(std::move(filename)), debug(debug) {
@@ -49,7 +48,7 @@ KeyPointsCollector::~KeyPointsCollector() {
   clang_disposeIndex(KPCIndex);
 }
 
-bool KeyPointsCollector::isBranchPointOrFunctionPtr(const CXCursorKind K) {
+bool KeyPointsCollector::isBranchPointOrCallExpr(const CXCursorKind K) {
   switch (K) {
   case CXCursor_IfStmt:
   case CXCursor_ForStmt:
@@ -63,8 +62,16 @@ bool KeyPointsCollector::isBranchPointOrFunctionPtr(const CXCursorKind K) {
   }
 }
 
+bool KeyPointsCollector::isFunctionPtr(const CXCursor C) {
+  CXType cursorType = clang_getCursorType(C);
+  if (cursorType.kind == CXType_Pointer) {
+    CXType ptrType = clang_getPointeeType(cursorType);
+    return ptrType.kind == CXType_FunctionProto;
+  }
+  return false;
+}
+
 bool KeyPointsCollector::checkChildAgainstStackTop(CXCursor child) {
-  //
   unsigned childLineNum;
   unsigned childColNum;
   BranchPointInfo *currBranch = getCurrentBranch();
@@ -101,7 +108,7 @@ CXChildVisitResult KeyPointsCollector::VisitorFunctionCore(CXCursor current,
 
   // If parent a branch point, and current is a compount statement,
   // warm up the KPC for analysis of said branch.
-  if (instance->isBranchPointOrFunctionPtr(parrKind) &&
+  if (instance->isBranchPointOrCallExpr(parrKind) &&
       currKind == CXCursor_CompoundStmt) {
 
     // Push new point to the stack and retrieve location
@@ -182,8 +189,9 @@ CXChildVisitResult KeyPointsCollector::VisitCallExpr(CXCursor current,
 
   CXSourceLocation callExprLoc = clang_getCursorLocation(current);
   CXToken *calleeNameTok = clang_getToken(instance->getTU(), callExprLoc);
-  std::string tokenName =
-      CXSTR(clang_getTokenSpelling(instance->getTU(), *calleeNameTok));
+  CXString tokenNameStr =
+      clang_getTokenSpelling(instance->getTU(), *calleeNameTok);
+  std::string tokenName(clang_getCString(tokenNameStr));
 
   if (instance->getFunctionByName(tokenName) != nullptr) {
     unsigned callLocLine;
@@ -191,8 +199,54 @@ CXChildVisitResult KeyPointsCollector::VisitCallExpr(CXCursor current,
                               nullptr, nullptr);
     instance->addCall(callLocLine, tokenName);
     clang_disposeTokens(instance->getTU(), calleeNameTok, 1);
+    clang_disposeString(tokenNameStr);
     return CXChildVisit_Break;
   }
+  clang_disposeString(tokenNameStr);
+  clang_disposeTokens(instance->getTU(), calleeNameTok, 1);
+
+  return CXChildVisit_Recurse;
+}
+
+CXChildVisitResult KeyPointsCollector::VisitFuncPtr(CXCursor current,
+                                                    CXCursor parent,
+                                                    CXClientData kpc) {
+  KeyPointsCollector *instance = static_cast<KeyPointsCollector *>(kpc);
+
+  // Get name of ptr
+  CXSourceLocation funcPtrLoc = clang_getCursorLocation(parent);
+  CXToken *funcPtrTok = clang_getToken(instance->getTU(), funcPtrLoc);
+  CXString funcPtrStr = clang_getTokenSpelling(instance->getTU(), *funcPtrTok);
+  std::string funcPtrName(clang_getCString(funcPtrStr));
+
+  // If no key in map, add a nullptr
+  if (!(MAP_FIND(instance->funcPtrs, funcPtrName)) &&
+      instance->currFuncPtrId.empty()) {
+    instance->currFuncPtrId = funcPtrName;
+  }
+
+  // Get name of pointee
+  CXSourceLocation funcPteeLoc = clang_getCursorLocation(current);
+  CXToken *funcPteeTok = clang_getToken(instance->getTU(), funcPteeLoc);
+  CXString funcPteeStr =
+      clang_getTokenSpelling(instance->getTU(), *funcPteeTok);
+  std::string funcPteeName(clang_getCString(funcPteeStr));
+
+  // Check pointee points to function.
+  if (instance->getFunctionByName(funcPteeName) != nullptr) {
+    instance->funcPtrs[instance->currFuncPtrId] = funcPteeName;
+    instance->currFuncPtrId.clear();
+    clang_disposeTokens(instance->getTU(), funcPtrTok, 1);
+    clang_disposeTokens(instance->getTU(), funcPteeTok, 1);
+    clang_disposeString(funcPtrStr);
+    clang_disposeString(funcPteeStr);
+    return CXChildVisit_Break;
+  }
+
+  clang_disposeString(funcPtrStr);
+  clang_disposeString(funcPteeStr);
+  clang_disposeTokens(instance->getTU(), funcPtrTok, 1);
+  clang_disposeTokens(instance->getTU(), funcPteeTok, 1);
 
   return CXChildVisit_Recurse;
 }
@@ -207,6 +261,12 @@ CXChildVisitResult KeyPointsCollector::VisitVarDecl(CXCursor current,
   CXSourceLocation varDeclLoc = clang_getCursorLocation(current);
   clang_getSpellingLocation(varDeclLoc, instance->getCXFile(), &varDeclLineNum,
                             nullptr, nullptr);
+
+  // Check if a function ptr
+  if (instance->isFunctionPtr(current)) {
+    clang_visitChildren(current, &KeyPointsCollector::VisitFuncPtr, kpc);
+    return CXChildVisit_Break;
+  }
 
   // Get token and its spelling
   CXToken *varDeclToken = clang_getToken(instance->getTU(), varDeclLoc);
@@ -579,6 +639,10 @@ void KeyPointsCollector::executeToolchain() {
   createDictionaryFile();
   transformProgram();
   compileModified();
+  for (const auto F : funcPtrs) {
+    QKDBG(F.first);
+    QKDBG(F.second);
+  }
   std::cout << "\nToolchain was successful, the branch dicitonary, modified "
                "file, and executable have been written to the "
             << OUT_DIR << " directory \n";
