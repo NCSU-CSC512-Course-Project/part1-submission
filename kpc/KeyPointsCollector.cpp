@@ -1,4 +1,4 @@
-// KeyPointsCollector.cpp
+ // KeyPointsCollector.cpp
 // ~~~~~~~~~~~~~~~~~~~~~~
 // Implementation of KeyPointsCollector interface.
 #include "KeyPointsCollector.h"
@@ -7,9 +7,11 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
-// Ctor Implementation
-KeyPointsCollector::KeyPointsCollector(const std::string &filename, bool debug)
-    : filename(std::move(filename)), debug(debug) {
+   // Ctor Implementation
+    KeyPointsCollector::KeyPointsCollector(const std::string &filename,
+                                           bool debug)
+    : filename(std::move(filename)),
+debug(debug) {
 
   // Check if file exists
   std::ifstream file(filename);
@@ -189,20 +191,29 @@ CXChildVisitResult KeyPointsCollector::VisitCallExpr(CXCursor current,
 
   CXSourceLocation callExprLoc = clang_getCursorLocation(current);
   CXToken *calleeNameTok = clang_getToken(instance->getTU(), callExprLoc);
-  CXString tokenNameStr =
+  CXString calleeNameStr =
       clang_getTokenSpelling(instance->getTU(), *calleeNameTok);
-  std::string tokenName(clang_getCString(tokenNameStr));
+  std::string calleeName(clang_getCString(calleeNameStr));
 
-  if (instance->getFunctionByName(tokenName) != nullptr) {
+  if (instance->getFunctionByName(calleeName) != nullptr) {
     unsigned callLocLine;
     clang_getSpellingLocation(callExprLoc, instance->getCXFile(), &callLocLine,
                               nullptr, nullptr);
-    instance->addCall(callLocLine, tokenName);
+    instance->addCall(callLocLine, calleeName);
     clang_disposeTokens(instance->getTU(), calleeNameTok, 1);
-    clang_disposeString(tokenNameStr);
+    clang_disposeString(calleeNameStr);
+    return CXChildVisit_Break;
+  } else if (MAP_FIND(instance->funcPtrs, calleeName)) {
+
+    unsigned callLocLine;
+    clang_getSpellingLocation(callExprLoc, instance->getCXFile(), &callLocLine,
+                              nullptr, nullptr);
+    instance->addCall(callLocLine, instance->funcPtrs[calleeName]);
+    clang_disposeTokens(instance->getTU(), calleeNameTok, 1);
+    clang_disposeString(calleeNameStr);
     return CXChildVisit_Break;
   }
-  clang_disposeString(tokenNameStr);
+  clang_disposeString(calleeNameStr);
   clang_disposeTokens(instance->getTU(), calleeNameTok, 1);
 
   return CXChildVisit_Recurse;
