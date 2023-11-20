@@ -9,8 +9,6 @@
 
 int main(int argc, char *argv[]) {
 
-  // Check a filename was passed
-
   // Get filename
   std::string filename;
   std::cout << "Enter a file name for analysis: ";
