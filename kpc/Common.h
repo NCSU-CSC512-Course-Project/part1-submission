@@ -9,8 +9,12 @@
 
 // File system output
 #define OUT_DIR "out/"
-#define EXE_OUT std::string(OUT_DIR + filename + ".out")
+#define EXE_OUT std::string(OUT_DIR + filename + ".modified.out")
 #define MODIFIED_PROGAM_OUT std::string(OUT_DIR + filename + ".modified.c")
+#define ORIGINAL_EXE_OUT std::string(OUT_DIR + filename + ".original.out")
+
+#define VALGRIND_PARSER "valgrind_parser.py"
+
 
 #define MAP_FIND(MAP, KEY) MAP.find(KEY) != MAP.end()
 

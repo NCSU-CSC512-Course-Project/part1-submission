@@ -627,7 +627,7 @@ void KeyPointsCollector::compileModified() {
 
   // Construct compilation command.
   std::stringstream compilationCommand;
-  compilationCommand << c_compiler << " " << MODIFIED_PROGAM_OUT << " -o "
+  compilationCommand << c_compiler << " -O0 " << MODIFIED_PROGAM_OUT << " -o "
                      << EXE_OUT;
 
   // Compile
@@ -635,7 +635,6 @@ void KeyPointsCollector::compileModified() {
 
   // Check if compiled properly
   if (compiled == EXIT_SUCCESS) {
-    /* std::remove(EXE_OUT.c_str()); */
     std::cout << "Compilation Successful" << '\n';
   } else {
     std::cerr << "There was an error with compilation, exiting!\n";
@@ -644,7 +643,65 @@ void KeyPointsCollector::compileModified() {
 }
 
 void KeyPointsCollector::invokeValgrind() {
+  // First compile the original program
+#if defined(__clang__)
+  std::string c_compiler("clang");
+#elif defined(__GNUC__)
+  std::string c_compiler("gcc");
+#endif
+  if (c_compiler.empty()) {
+    c_compiler = std::getenv("CC");
+    if (c_compiler.empty()) {
+      std::cerr << "No viable C compiler found on system!\n";
+      exit(EXIT_FAILURE);
+    }
+  }
 
+  // Check we acutally have a file to compile
+  if (!static_cast<bool>(std::ifstream(filename).good())) {
+    std::cerr << "No program to compile!\n";
+    exit(EXIT_FAILURE);
+  }
+
+  // Construct compilation command.
+  std::stringstream shellCommandStream;
+  shellCommandStream << c_compiler << " -O0 " << filename << " -o "
+                     << ORIGINAL_EXE_OUT;
+
+  // Compile
+  bool compiled = static_cast<bool>(system(shellCommandStream.str().c_str()));
+
+  // Check if compiled properly
+  if (compiled == EXIT_SUCCESS) {
+    std::cout << "Compilation Successful" << '\n';
+  } else {
+    std::cerr << "There was an error with compilation, exiting!\n";
+    exit(EXIT_FAILURE);
+  }
+
+  // Clear stream and construt valgrind command
+  const std::string valgrindLogFile(OUT_DIR + filename + ".VALGRIND_OUT");
+  shellCommandStream.str("");
+  shellCommandStream.clear();
+  shellCommandStream << "valgrind --tool=callgrind --dump-instr=yes --log-file="
+                     << valgrindLogFile << " " << ORIGINAL_EXE_OUT;
+
+  // Run valgrind
+  bool valgrind = static_cast<bool>(system(shellCommandStream.str().c_str()));
+
+  // If successful, invoke python script to collect executed number of
+  // instructions.
+  if (valgrind) {
+    std::cout << "Valgrind invoked successfully\n";
+    // First remove the call grind files generated.
+    system("rm -r callgrind*");
+    // Invoke python script
+    shellCommandStream.str("");
+    shellCommandStream.clear();
+    shellCommandStream << "python3 " << VALGRIND_PARSER << " "
+                       << valgrindLogFile;
+    system(shellCommandStream.str().c_str());
+  }
 }
 
 void KeyPointsCollector::executeToolchain() {
@@ -655,4 +712,11 @@ void KeyPointsCollector::executeToolchain() {
   std::cout << "\nToolchain was successful, the branch dicitonary, modified "
                "file, and executable have been written to the "
             << OUT_DIR << " directory \n";
+
+  char decision;
+  std::cout << "Would you like to invoke Valgrind? (y/n) ";
+  std::cin >> decision;
+  if (decision == 'y') {
+    invokeValgrind();
+  }
 }
