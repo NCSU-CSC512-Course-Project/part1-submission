@@ -627,7 +627,7 @@ void KeyPointsCollector::compileModified() {
 
   // Construct compilation command.
   std::stringstream compilationCommand;
-  compilationCommand << c_compiler << " -O0 " << MODIFIED_PROGAM_OUT << " -o "
+  compilationCommand << c_compiler << " -w -O0 " << MODIFIED_PROGAM_OUT << " -o "
                      << EXE_OUT;
 
   // Compile
