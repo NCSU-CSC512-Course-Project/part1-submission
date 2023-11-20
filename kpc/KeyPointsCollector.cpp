@@ -714,9 +714,15 @@ void KeyPointsCollector::executeToolchain() {
             << OUT_DIR << " directory \n";
 
   char decision;
-  std::cout << "Would you like to invoke Valgrind? (y/n) ";
+  std::cout << "\nWould you like to invoke Valgrind? (y/n) ";
   std::cin >> decision;
   if (decision == 'y') {
     invokeValgrind();
+  }
+
+  std::cout << "\nWould you like to out put the branch pointer trace for the program? (y/n) ";
+  std::cin >> decision;
+  if (decision == 'y') {
+    system(EXE_OUT.c_str());
   }
 }

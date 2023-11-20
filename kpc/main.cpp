@@ -4,15 +4,23 @@
 #include "KeyPointsCollector.h"
 
 #include <cassert>
+#include <fstream>
 #include <iostream>
 
 int main(int argc, char *argv[]) {
 
   // Check a filename was passed
-  assert(argc > 1 && "Must provide a file name as an argument!");
 
   // Get filename
-  const std::string filename(argv[1]);
+  std::string filename;
+  std::cout << "Enter a file name for analysis: ";
+  std::cin >> filename;
+
+  if (!static_cast<bool>(std::ifstream(filename).good())) {
+    std::cerr << "There was an issue opening " << filename
+              << " for analysis, exiting!\n";
+    exit(EXIT_FAILURE);
+  }
 
   // Init the KPC
   KeyPointsCollector kpc(
