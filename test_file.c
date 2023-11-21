@@ -1,7 +1,6 @@
 int add(int a, int b) { return a + b; }
 
-int sub(int a, int b) { 
-  return a - b; }
+int sub(int a, int b) { return a - b; }
 
 int main(void) {
   int (*add_ptr)(int, int) = &add;

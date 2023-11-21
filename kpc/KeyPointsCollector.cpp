@@ -4,7 +4,6 @@
 #include "KeyPointsCollector.h"
 #include "Common.h"
 #include <algorithm>
-#include <clang/Format/Format.h>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -258,8 +257,14 @@ CXChildVisitResult KeyPointsCollector::VisitCallExpr(CXCursor current,
     clang_getSpellingLocation(callExprLoc, instance->getCXFile(), &callLocLine,
                               nullptr, nullptr);
     instance->addCall(callLocLine, calleeName);
+    // Possibly set recursion flag for function being called.
+
+    if (instance->getFunctionByName(calleeName)->isInBody(callLocLine)) {
+      instance->getFunctionByName(calleeName)->setRecursive();
+    }
     clang_disposeTokens(instance->getTU(), calleeNameTok, 1);
     clang_disposeString(calleeNameStr);
+
     return CXChildVisit_Break;
   } else if (MAP_FIND(instance->funcPtrs, calleeName)) {
 
@@ -510,7 +515,10 @@ void KeyPointsCollector::transformProgram() {
 
         // Declare a pointer to the current function within the function scope
         // to handle recursive calls.
-        if (currentFunction->name.compare("main")) {
+        QKDBG(currentFunction->name);
+        QKDBG(currentFunction->recursive);
+        if (currentFunction->name.compare("main") &&
+            currentFunction->recursive) {
           modifiedProgram << DECLARE_FUNC_PTR(currentFunction);
         }
 
@@ -530,9 +538,9 @@ void KeyPointsCollector::transformProgram() {
       }
 
       // If the previous line was a branch point, set the branch
-      if (MAP_FIND(branchDict, lineNum - 2)) {
+      if (MAP_FIND(branchDict, lineNum - 1)) {
         modifiedProgram << SET_BRANCH(foundPoints.size());
-        foundPoints.push_back(lineNum - 2);
+        foundPoints.push_back(lineNum - 1);
       }
 
       // Iterate over found branch points and look for targets

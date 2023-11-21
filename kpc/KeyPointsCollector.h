@@ -116,11 +116,21 @@ class KeyPointsCollector {
     const std::string name;
     // Return type of function
     const std::string type;
+    // Is it a recursive function?
+    bool recursive;
 
     FunctionDeclInfo(unsigned defLoc, unsigned endLoc, const std::string &name,
                      const std::string &type)
         : defLoc(defLoc), endLoc(endLoc), name(std::move(name)),
           type(std::move(type)) {}
+
+    // Sets the recursive marker
+    void setRecursive() { recursive = true; }
+
+    // Is this line number inside this func body?
+    bool isInBody(unsigned lineNum) {
+      return lineNum >= defLoc && lineNum <= endLoc;
+    }
   };
 
   // Add func decl to maps.
