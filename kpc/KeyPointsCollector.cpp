@@ -4,6 +4,7 @@
 #include "KeyPointsCollector.h"
 #include "Common.h"
 #include <algorithm>
+#include <clang/Format/Format.h>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -16,10 +17,25 @@ KeyPointsCollector::KeyPointsCollector(const std::string &filename, bool debug)
   if (file.good()) {
     file.close();
 
+    // Format the file
+    std::stringstream formatCommand;
+    formatCommand << "clang-format -i --style=Google " << filename;
+    system(formatCommand.str().c_str());
+
+    // Remove include directives. We do this before parsing the translation unit
+    // as LibClang with parse ALL included files. For the sake of this project,
+    // we are only looking at user defined functions, so we dont need to parse
+    // any included files.
+    removeIncludeDirectives();
+
     // If good, try to parse the translation unit.
-    translationUnit =
-        clang_parseTranslationUnit(KPCIndex, filename.c_str(), nullptr, 0,
-                                   nullptr, 0, CXTranslationUnit_None);
+    translationUnit = clang_createTranslationUnitFromSourceFile(
+        KPCIndex, filename.c_str(), 0, nullptr, 0, nullptr);
+
+    // Reinsert the include directives. After the TU has been parsed, we can
+    // reinsert them before transformation.
+    reInsertIncludeDirectives();
+
     // Check if parsed properly
     if (translationUnit == nullptr) {
       std::cerr
@@ -46,6 +62,50 @@ KeyPointsCollector::KeyPointsCollector(const std::string &filename, bool debug)
 KeyPointsCollector::~KeyPointsCollector() {
   clang_disposeTranslationUnit(translationUnit);
   clang_disposeIndex(KPCIndex);
+}
+
+void KeyPointsCollector::removeIncludeDirectives() {
+
+  std::ifstream file(filename);
+  std::ofstream tempFile("temp.c");
+  std::string currentLine;
+  const std::string includeStr("#include");
+  unsigned lineNum = 1;
+
+  if (file.good() && tempFile.good()) {
+    while (getline(file, currentLine)) {
+      if (currentLine.find(includeStr) == 0) {
+        addIncludeDirective(lineNum++, currentLine);
+        continue;
+      }
+      lineNum++;
+      tempFile << currentLine << '\n';
+    }
+  }
+  std::remove(filename.c_str());
+  std::rename("temp.c", filename.c_str());
+}
+
+void KeyPointsCollector::reInsertIncludeDirectives() {
+
+  std::ifstream file(filename);
+  std::ofstream tempFile("temp.c");
+  std::string currentLine;
+  const std::string includeStr("#include");
+  unsigned lineNum = 1;
+
+  if (file.good() && tempFile.good()) {
+    while (getline(file, currentLine)) {
+      if (MAP_FIND(includeDirectives, lineNum)) {
+        tempFile << includeDirectives[lineNum] << '\n';
+      }
+      lineNum++;
+      tempFile << currentLine << '\n';
+    }
+  }
+
+  std::remove(filename.c_str());
+  std::rename("temp.c", filename.c_str());
 }
 
 bool KeyPointsCollector::isBranchPointOrCallExpr(const CXCursorKind K) {
@@ -193,7 +253,7 @@ CXChildVisitResult KeyPointsCollector::VisitCallExpr(CXCursor current,
       clang_getTokenSpelling(instance->getTU(), *calleeNameTok);
   std::string calleeName(clang_getCString(calleeNameStr));
 
-  if (instance->getFunctionByName(calleeName) != nullptr) {
+  if (MAP_FIND(instance->funcDeclsString, calleeName)) {
     unsigned callLocLine;
     clang_getSpellingLocation(callExprLoc, instance->getCXFile(), &callLocLine,
                               nullptr, nullptr);
@@ -445,8 +505,15 @@ void KeyPointsCollector::transformProgram() {
 
       // If previous line is a function def/decl, insert the branch points for
       // that function and set current function.
-      if (MAP_FIND(funcDecls, lineNum - 1)) {
-        currentFunction = funcDecls[lineNum - 1];
+      if (MAP_FIND(funcDecls, lineNum - 2)) {
+        currentFunction = funcDecls[lineNum - 2];
+
+        // Declare a pointer to the current function within the function scope
+        // to handle recursive calls.
+        if (currentFunction->name.compare("main")) {
+          modifiedProgram << DECLARE_FUNC_PTR(currentFunction);
+        }
+
         foundPoints.clear();
         branchCountCurrFunc = 0;
         insertFunctionBranchPointDecls(modifiedProgram, currentFunction,
@@ -457,15 +524,15 @@ void KeyPointsCollector::transformProgram() {
       // function, create a pointer pointer for that function so we can access
       // it for logging purposes. Also, the current function shouldn't be main.
       if (currentFunction != nullptr &&
-          (lineNum - 1) == currentFunction->endLoc &&
+          (lineNum - 2) == currentFunction->endLoc &&
           currentFunction->name.compare("main")) {
         modifiedProgram << DECLARE_FUNC_PTR(currentFunction);
       }
 
       // If the previous line was a branch point, set the branch
-      if (MAP_FIND(branchDict, lineNum - 1)) {
+      if (MAP_FIND(branchDict, lineNum - 2)) {
         modifiedProgram << SET_BRANCH(foundPoints.size());
-        foundPoints.push_back(lineNum - 1);
+        foundPoints.push_back(lineNum - 2);
       }
 
       // Iterate over found branch points and look for targets
@@ -627,8 +694,8 @@ void KeyPointsCollector::compileModified() {
 
   // Construct compilation command.
   std::stringstream compilationCommand;
-  compilationCommand << c_compiler << " -w -O0 " << MODIFIED_PROGAM_OUT << " -o "
-                     << EXE_OUT;
+  compilationCommand << c_compiler << " -w -O0 " << MODIFIED_PROGAM_OUT
+                     << " -o " << EXE_OUT;
 
   // Compile
   bool compiled = static_cast<bool>(system(compilationCommand.str().c_str()));
@@ -720,7 +787,8 @@ void KeyPointsCollector::executeToolchain() {
     invokeValgrind();
   }
 
-  std::cout << "\nWould you like to out put the branch pointer trace for the program? (y/n) ";
+  std::cout << "\nWould you like to out put the branch pointer trace for the "
+               "program? (y/n) ";
   std::cin >> decision;
   if (decision == 'y') {
     system(EXE_OUT.c_str());

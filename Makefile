@@ -23,7 +23,7 @@ clean_out:
 	rm -f $(OUT_DIR)/*
 
 run: clean_out all
-	$(EXE) test_file.c
+	$(EXE)
 
 drun: all
 	$(EXE) test_file.c --debug

@@ -43,6 +43,20 @@ class KeyPointsCollector {
   // Debug option
   bool debug;
 
+  // Map to hold include directives
+  std::map<unsigned, std::string> includeDirectives;
+
+  // Adds include directive to map
+  void addIncludeDirective(unsigned lineNum, std::string includeDirective) {
+    includeDirectives[lineNum] = includeDirective;
+  }
+
+  // Method to remove include directives from source file before parsing.
+  void removeIncludeDirectives();
+
+  // Method to reinsert include directives into source file.
+  void reInsertIncludeDirectives();
+
   // This is a weird one, since clang_visitChildren requires a function ptr
   // for its second argument without any signature, its not possible to capture
   // 'this' with a lambda. Consequently, we mark this function as static and
