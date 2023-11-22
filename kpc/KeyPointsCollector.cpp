@@ -130,6 +130,10 @@ bool KeyPointsCollector::isFunctionPtr(const CXCursor C) {
   return false;
 }
 
+bool KeyPointsCollector::inCurrentFunction(unsigned lineNum) {
+  return currentFunction->isInBody(lineNum);
+}
+
 bool KeyPointsCollector::checkChildAgainstStackTop(CXCursor child) {
   unsigned childLineNum;
   unsigned childColNum;
@@ -138,17 +142,20 @@ bool KeyPointsCollector::checkChildAgainstStackTop(CXCursor child) {
   clang_getSpellingLocation(childLoc, getCXFile(), &childLineNum, &childColNum,
                             nullptr);
 
-  if (childLineNum > currBranch->compoundEndLineNum ||
-      (childLineNum == currBranch->compoundEndLineNum &&
-       childColNum > currBranch->compoundEndColumnNum)) {
-    getCurrentBranch()->addTarget(childLineNum);
-    if (debug) {
-      printFoundTargetPoint();
+  if (inCurrentFunction(childLineNum)) {
+    if (childLineNum > currBranch->compoundEndLineNum ||
+        (childLineNum == currBranch->compoundEndLineNum &&
+         childColNum > currBranch->compoundEndColumnNum)) {
+      getCurrentBranch()->addTarget(childLineNum + includeDirectives.size());
+      if (debug) {
+        printFoundTargetPoint();
+      }
+      return true;
+    } else {
+      return false;
     }
-    return true;
-  } else {
-    return false;
   }
+  return false;
 }
 
 CXChildVisitResult KeyPointsCollector::VisitorFunctionCore(CXCursor current,
@@ -177,6 +184,9 @@ CXChildVisitResult KeyPointsCollector::VisitorFunctionCore(CXCursor current,
     clang_getSpellingLocation(loc, instance->getCXFile(),
                               instance->getCurrentBranch()->getBranchPointOut(),
                               nullptr, nullptr);
+    // Increment the branch point by the amount of include directives we used.
+    instance->getCurrentBranch()->branchPoint +=
+        instance->includeDirectives.size();
 
     // Debug routine
     if (instance->debug) {
@@ -186,11 +196,11 @@ CXChildVisitResult KeyPointsCollector::VisitorFunctionCore(CXCursor current,
     // Visit first child of compound to get target.
     clang_visitChildren(current, &KeyPointsCollector::VisitCompoundStmt, kpc);
 
-    // Save end of compound statement
+    // Save end of parent statement
     BranchPointInfo *currBranch = instance->getCurrentBranch();
-    CXSourceLocation compoundEnd =
-        clang_getRangeEnd(clang_getCursorExtent(current));
-    clang_getSpellingLocation(compoundEnd, instance->getCXFile(),
+    CXSourceLocation parentEnd =
+        clang_getRangeEnd(clang_getCursorExtent(parent));
+    clang_getSpellingLocation(parentEnd, instance->getCXFile(),
                               &(currBranch->compoundEndLineNum), nullptr,
                               nullptr);
   }
@@ -234,7 +244,8 @@ CXChildVisitResult KeyPointsCollector::VisitCompoundStmt(CXCursor current,
                             nullptr, nullptr);
 
   // Append line number to targets
-  instance->getCurrentBranch()->addTarget(targetLineNumber);
+  instance->getCurrentBranch()->addTarget(targetLineNumber +
+                                          instance->includeDirectives.size());
   if (instance->debug) {
     instance->printFoundTargetPoint();
   }
@@ -390,8 +401,10 @@ CXChildVisitResult KeyPointsCollector::VisitFuncDecl(CXCursor current,
 
     // Add to map
     instance->addFuncDecl(std::make_shared<FunctionDeclInfo>(
-        begLineNum, endLineNum, funcName,
+        begLineNum + instance->includeDirectives.size(),
+        endLineNum + instance->includeDirectives.size(), funcName,
         clang_getCString(funcReturnTypeSpelling)));
+    instance->currentFunction = instance->getFunctionByName(funcName);
     if (instance->debug) {
       std::cout << "Found FunctionDecl: " << funcName << " of return type: "
                 << clang_getCString(funcReturnTypeSpelling)
@@ -486,7 +499,7 @@ void KeyPointsCollector::transformProgram() {
     std::string currentLine;
 
     // Current function being analyzed
-    std::shared_ptr<FunctionDeclInfo> currentFunction = nullptr;
+    std::shared_ptr<FunctionDeclInfo> currentTransformFunction = nullptr;
 
     // Amount of branches within current function.
     int branchCountCurrFunc;
@@ -510,31 +523,29 @@ void KeyPointsCollector::transformProgram() {
 
       // If previous line is a function def/decl, insert the branch points for
       // that function and set current function.
-      if (MAP_FIND(funcDecls, lineNum - 2)) {
-        currentFunction = funcDecls[lineNum - 2];
+      if (MAP_FIND(funcDecls, lineNum - 1)) {
+        currentTransformFunction = funcDecls[lineNum - 1];
 
         // Declare a pointer to the current function within the function scope
         // to handle recursive calls.
-        QKDBG(currentFunction->name);
-        QKDBG(currentFunction->recursive);
-        if (currentFunction->name.compare("main") &&
-            currentFunction->recursive) {
-          modifiedProgram << DECLARE_FUNC_PTR(currentFunction);
+        if (currentTransformFunction->name.compare("main") &&
+            currentTransformFunction->recursive) {
+          modifiedProgram << DECLARE_FUNC_PTR(currentTransformFunction);
         }
 
         foundPoints.clear();
         branchCountCurrFunc = 0;
-        insertFunctionBranchPointDecls(modifiedProgram, currentFunction,
-                                       &branchCountCurrFunc);
+        insertFunctionBranchPointDecls(
+            modifiedProgram, currentTransformFunction, &branchCountCurrFunc);
       }
 
       // If we have a current function AND the previous line is the end of said
       // function, create a pointer pointer for that function so we can access
       // it for logging purposes. Also, the current function shouldn't be main.
-      if (currentFunction != nullptr &&
-          (lineNum - 2) == currentFunction->endLoc &&
-          currentFunction->name.compare("main")) {
-        modifiedProgram << DECLARE_FUNC_PTR(currentFunction);
+      if (currentTransformFunction != nullptr &&
+          (lineNum - 1) == currentTransformFunction->endLoc &&
+          currentTransformFunction->name.compare("main")) {
+        modifiedProgram << DECLARE_FUNC_PTR(currentTransformFunction);
       }
 
       // If the previous line was a branch point, set the branch

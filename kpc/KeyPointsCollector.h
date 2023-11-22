@@ -154,6 +154,12 @@ class KeyPointsCollector {
     return nullptr;
   }
 
+  // Current function being traversed.
+  std::shared_ptr<FunctionDeclInfo> currentFunction;
+
+  // Checks to see if the line number is in the current function
+  bool inCurrentFunction(unsigned lineNumber);
+
   // Map of line numbers mapped to the function being called
   std::map<unsigned, std::string> functionCalls;
 
