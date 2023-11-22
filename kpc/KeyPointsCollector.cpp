@@ -130,10 +130,6 @@ bool KeyPointsCollector::isFunctionPtr(const CXCursor C) {
   return false;
 }
 
-bool KeyPointsCollector::inCurrentFunction(unsigned lineNum) {
-  return currentFunction->isInBody(lineNum);
-}
-
 bool KeyPointsCollector::checkChildAgainstStackTop(CXCursor child) {
   unsigned childLineNum;
   unsigned childColNum;
