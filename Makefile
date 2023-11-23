@@ -1,5 +1,5 @@
 # Makefile for KeyPointsCollector
-CXX = clang++
+CXX = g++
 CXXFLAGS = -O0 -g3 -std=c++17
 LINKER_FLAGS = -lclang
 DBG_FLAGS = -DDEBUG=true
