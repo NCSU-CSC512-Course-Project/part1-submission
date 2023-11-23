@@ -87,6 +87,46 @@ br_4
 func_0x55c84b2d0140
 br_5
 ```
-
-
 ## Build and Usage
+To build this project, ensure you have the following items on your system. (These should all be installed on NCSU Ubuntu 22.04 LTS Image)<br>
+- LibClang, this is a part of the LLVM Project. To build correctly, run the build script [here](https://github.com/NCSU-CSC512-Course-Project/part1-dev/blob/main/build_llvm.sh)
+- Python 3.10
+
+To build:<br>
+```bash
+make
+```
+To run, place test files in the root directory.<br>
+```bash
+make run
+```
+You will be given a series of prompts to run the program, and all the files will be written to the ```out``` directory. Below is an example of the full shell output for the above program:<br>
+```
+$ part1-dev git:(main) make run
+rm -f out/*
+mkdir -p bin bin/objs out
+clang++  bin/objs/KeyPointsCollector.o  bin/objs/main.o -O0 -g3 -std=c++17 -lclang -o bin/kpc
+bin/kpc
+Enter a file name for analysis: test_file.c
+Translation unit for file: test_file.c successfully parsed.
+C compiler is: clang
+Compilation Successful
+
+Toolchain was successful, the branch dicitonary, modified file, and executable have been written to the out/ directory
+
+Would you like to invoke Valgrind? (y/n) y
+Compilation Successful
+Valgrind invoked successfully
+The total number of executed instructions for the program was: 153545
+
+Would you like to output the branch pointer trace for the program? (y/n) y
+func_0x55975afa8140
+br_1
+br_4
+func_0x55975afa8140
+br_4
+func_0x55975afa8140
+br_4
+func_0x55975afa8140
+br_5
+```
