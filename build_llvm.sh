@@ -1,4 +1,4 @@
-# Script for building LLVM with LibClang (Clang tools Extra).
+#!/bin/bash
 
 # Ensure CMake and Ninja are Installed
 sudo apt update
