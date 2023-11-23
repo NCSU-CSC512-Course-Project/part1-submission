@@ -2,15 +2,16 @@
 // ~~~~~~~~~~~~~~~~~~~~~~
 // Implementation of KeyPointsCollector interface.
 #include "KeyPointsCollector.h"
-#include "Common.h"
+
 #include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <sstream>
+
+#include "Common.h"
 // Ctor Implementation
 KeyPointsCollector::KeyPointsCollector(const std::string &filename, bool debug)
     : filename(std::move(filename)), debug(debug) {
-
   // Check if file exists
   std::ifstream file(filename);
   if (file.good()) {
@@ -18,7 +19,7 @@ KeyPointsCollector::KeyPointsCollector(const std::string &filename, bool debug)
 
     // Format the file
     std::stringstream formatCommand;
-    formatCommand << "clang-format -i --style=Google " << filename;
+    formatCommand << "clang-format -i --style=file_format_style " << filename;
     system(formatCommand.str().c_str());
 
     // Remove include directives. We do this before parsing the translation unit
@@ -51,7 +52,6 @@ KeyPointsCollector::KeyPointsCollector(const std::string &filename, bool debug)
     executeToolchain();
     // Traverse
   } else {
-
     std::cerr << "File with name: " << filename
               << ", does not exist! Exiting...\n";
     exit(EXIT_FAILURE);
@@ -64,7 +64,6 @@ KeyPointsCollector::~KeyPointsCollector() {
 }
 
 void KeyPointsCollector::removeIncludeDirectives() {
-
   std::ifstream file(filename);
   std::ofstream tempFile("temp.c");
   std::string currentLine;
@@ -86,7 +85,6 @@ void KeyPointsCollector::removeIncludeDirectives() {
 }
 
 void KeyPointsCollector::reInsertIncludeDirectives() {
-
   std::ifstream file(filename);
   std::ofstream tempFile("temp.c");
   std::string currentLine;
@@ -172,7 +170,6 @@ CXChildVisitResult KeyPointsCollector::VisitorFunctionCore(CXCursor current,
   // warm up the KPC for analysis of said branch.
   if (instance->isBranchPointOrCallExpr(parrKind) &&
       currKind == CXCursor_CompoundStmt) {
-
     // Push new point to the stack and retrieve location
     instance->addCursor(parent);
     instance->pushNewBranchPoint();
@@ -263,7 +260,8 @@ CXChildVisitResult KeyPointsCollector::VisitCallExpr(CXCursor current,
     unsigned callLocLine;
     clang_getSpellingLocation(callExprLoc, instance->getCXFile(), &callLocLine,
                               nullptr, nullptr);
-    instance->addCall(callLocLine, calleeName);
+    instance->addCall(callLocLine + instance->includeDirectives.size(),
+                      calleeName);
     // Possibly set recursion flag for function being called.
 
     if (instance->getFunctionByName(calleeName)->isInBody(callLocLine)) {
@@ -274,11 +272,11 @@ CXChildVisitResult KeyPointsCollector::VisitCallExpr(CXCursor current,
 
     return CXChildVisit_Break;
   } else if (MAP_FIND(instance->funcPtrs, calleeName)) {
-
     unsigned callLocLine;
     clang_getSpellingLocation(callExprLoc, instance->getCXFile(), &callLocLine,
                               nullptr, nullptr);
-    instance->addCall(callLocLine, instance->funcPtrs[calleeName]);
+    instance->addCall(callLocLine + instance->includeDirectives.size(),
+                      instance->funcPtrs[calleeName]);
     clang_disposeTokens(instance->getTU(), calleeNameTok, 1);
     clang_disposeString(calleeNameStr);
     return CXChildVisit_Break;
@@ -363,7 +361,8 @@ CXChildVisitResult KeyPointsCollector::VisitVarDecl(CXCursor current,
       std::cout << "Found VarDecl: " << varName << " at line # "
                 << varDeclLineNum << '\n';
     }
-    instance->addVarDeclToMap(varName, varDeclLineNum);
+    instance->addVarDeclToMap(varName, varDeclLineNum +
+                                           instance->includeDirectives.size());
   }
   clang_disposeTokens(instance->getTU(), varDeclToken, 1);
   return CXChildVisit_Break;
@@ -435,7 +434,6 @@ void KeyPointsCollector::printCursorKind(const CXCursorKind K) {
 }
 
 void KeyPointsCollector::createDictionaryFile() {
-
   // Open new file for the dicitonary.
   std::ofstream dictFile(std::string(OUT_DIR + filename + ".branch_dict"));
   dictFile << "Branch Dictionary for: " << filename << '\n';
@@ -477,14 +475,12 @@ void KeyPointsCollector::addBranchesToDictionary() {
 }
 
 void KeyPointsCollector::transformProgram() {
-
   // First, open original file for reading, and modified file for writing.
   std::ifstream originalProgram(filename);
   std::ofstream modifiedProgram(MODIFIED_PROGAM_OUT);
 
   // Check files opened successfully
   if (originalProgram.good() && modifiedProgram.good()) {
-
     // First write the header to the output file
     modifiedProgram << TRANSFORM_HEADER;
 
@@ -516,7 +512,6 @@ void KeyPointsCollector::transformProgram() {
 
     // Core iteration over original program
     while (getline(originalProgram, currentLine)) {
-
       // If previous line is a function def/decl, insert the branch points for
       // that function and set current function.
       if (MAP_FIND(funcDecls, lineNum - 1)) {
@@ -559,7 +554,6 @@ void KeyPointsCollector::transformProgram() {
 
       if (!foundPoints.empty()) {
         for (int idx = foundPoints.size() - 1; idx >= 0; --idx) {
-
           // Get targets for BP
           std::map<unsigned, std::string> targets =
               branchDict[foundPoints[idx]];
@@ -578,10 +572,11 @@ void KeyPointsCollector::transformProgram() {
         // None? Get outta there.
       case 0:
         break;
-      // If only one target for the line number, check to see if all successive
-      // branch points have NOT been set, this prevents unecessary logging after
-      // the exit of something like an if block. e.g if the target is from
-      // BRANCH_0,  ensure that BRANCH_1...BRANCH_N arent set = 1;
+      // If only one target for the line number, check to see if all
+      // successive branch points have NOT been set, this prevents unecessary
+      // logging after the exit of something like an if block. e.g if the
+      // target is from BRANCH_0,  ensure that BRANCH_1...BRANCH_N arent set =
+      // 1;
       case 1: {
         // If branch actually has successive points, then construct a
         // conditional.
@@ -619,8 +614,8 @@ void KeyPointsCollector::transformProgram() {
         break;
       }
       // Default is more than 2, in this case, we need to insert a proper if,
-      // else if, else chain for all the targets available for the current line
-      // number.
+      // else if, else chain for all the targets available for the current
+      // line number.
       default: {
         // Insert initial if block
         modifiedProgram
@@ -800,6 +795,7 @@ void KeyPointsCollector::executeToolchain() {
   std::cin >> decision;
   if (decision == 'y') {
     invokeValgrind();
+    system("rm -r callgrind*");
   }
 
   std::cout << "\nWould you like to out put the branch pointer trace for the "
