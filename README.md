@@ -94,6 +94,7 @@ To build this project, ensure you have the following items on your system. (Thes
 
 To build:<br>
 ```bash
+./build_llvm.sh
 make
 ```
 To run, place test files in the root directory.<br>
