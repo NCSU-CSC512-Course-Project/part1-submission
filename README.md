@@ -131,3 +131,5 @@ br_4
 func_0x55975afa8140
 br_5
 ```
+# Testing (For Grader)
+All our chosen test files are prefixed with TF in the root directory, TF_3_SPEC.c is the chosen SPEC program for our testing.
