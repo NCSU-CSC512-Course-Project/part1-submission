@@ -773,7 +773,7 @@ void KeyPointsCollector::invokeValgrind() {
 
   // If successful, invoke python script to collect executed number of
   // instructions.
-  if (valgrind) {
+  if (valgrind == EXIT_SUCCESS) {
     std::cout << "Valgrind invoked successfully\n";
     // First remove the call grind files generated.
     system("rm -r callgrind*");
@@ -800,7 +800,6 @@ void KeyPointsCollector::executeToolchain() {
   std::cin >> decision;
   if (decision == 'y') {
     invokeValgrind();
-    system("rm -r callgrind*");
   }
 
   std::cout << "\nWould you like to out put the branch pointer trace for the "
