@@ -107,15 +107,15 @@ void KeyPointsCollector::reInsertIncludeDirectives() {
 
 bool KeyPointsCollector::isBranchPointOrCallExpr(const CXCursorKind K) {
   switch (K) {
-  case CXCursor_IfStmt:
-  case CXCursor_ForStmt:
-  case CXCursor_DoStmt:
-  case CXCursor_WhileStmt:
-  case CXCursor_SwitchStmt:
-  case CXCursor_CallExpr:
-    return true;
-  default:
-    return false;
+    case CXCursor_IfStmt:
+    case CXCursor_ForStmt:
+    case CXCursor_DoStmt:
+    case CXCursor_WhileStmt:
+    case CXCursor_SwitchStmt:
+    case CXCursor_CallExpr:
+      return true;
+    default:
+      return false;
   }
 }
 
@@ -361,8 +361,8 @@ CXChildVisitResult KeyPointsCollector::VisitVarDecl(CXCursor current,
       std::cout << "Found VarDecl: " << varName << " at line # "
                 << varDeclLineNum << '\n';
     }
-    instance->addVarDeclToMap(varName, varDeclLineNum +
-                                           instance->includeDirectives.size());
+    instance->addVarDeclToMap(
+        varName, varDeclLineNum + instance->includeDirectives.size());
   }
   clang_disposeTokens(instance->getTU(), varDeclToken, 1);
   return CXChildVisit_Break;
@@ -520,7 +520,8 @@ void KeyPointsCollector::transformProgram() {
         // Declare a pointer to the current function within the function scope
         // to handle recursive calls.
         if (currentTransformFunction->name.compare("main") &&
-            currentTransformFunction->recursive) {
+            currentTransformFunction->recursive &&
+            currentTransformFunction->type != "void") {
           modifiedProgram << DECLARE_FUNC_PTR(currentTransformFunction);
         }
 
@@ -569,80 +570,84 @@ void KeyPointsCollector::transformProgram() {
       // After targets are found, insert proper logging logic into modified
       // program.
       switch (foundPointsIdxCurrentLine.size()) {
-        // None? Get outta there.
-      case 0:
-        break;
-      // If only one target for the line number, check to see if all
-      // successive branch points have NOT been set, this prevents unecessary
-      // logging after the exit of something like an if block. e.g if the
-      // target is from BRANCH_0,  ensure that BRANCH_1...BRANCH_N arent set =
-      // 1;
-      case 1: {
-        // If branch actually has successive points, then construct a
-        // conditional.
-        if (foundPointsIdxCurrentLine[0] + 1 < branchCountCurrFunc) {
-          modifiedProgram << "if (";
-          for (int successive = foundPointsIdxCurrentLine[0] + 1;
-               successive < branchCountCurrFunc; successive++) {
-            modifiedProgram << "!BRANCH_" << successive;
-            if (branchCountCurrFunc - successive > 1)
-              modifiedProgram << " && ";
+          // None? Get outta there.
+        case 0:
+          break;
+        // If only one target for the line number, check to see if all
+        // successive branch points have NOT been set, this prevents unecessary
+        // logging after the exit of something like an if block. e.g if the
+        // target is from BRANCH_0,  ensure that BRANCH_1...BRANCH_N arent set =
+        // 1;
+        case 1: {
+          // If branch actually has successive points, then construct a
+          // conditional.
+          if (foundPointsIdxCurrentLine[0] + 1 < branchCountCurrFunc) {
+            modifiedProgram << "if (";
+            for (int successive = foundPointsIdxCurrentLine[0] + 1;
+                 successive < branchCountCurrFunc; successive++) {
+              modifiedProgram << "!BRANCH_" << successive;
+              if (branchCountCurrFunc - successive > 1)
+                modifiedProgram << " && ";
+            }
+            modifiedProgram
+                << ") LOG(\""
+                << branchDict[foundPoints[foundPointsIdxCurrentLine[0]]]
+                             [lineNum]
+                << "\");";
           }
-          modifiedProgram
-              << ") LOG(\""
-              << branchDict[foundPoints[foundPointsIdxCurrentLine[0]]][lineNum]
-              << "\");";
+          // If not, just log it.
+          else {
+            modifiedProgram
+                << "LOG(\""
+                << branchDict[foundPoints[foundPointsIdxCurrentLine[0]]]
+                             [lineNum]
+                << "\");";
+          }
+          break;
         }
-        // If not, just log it.
-        else {
+        // If two targets for the current line number, we can insert a simple if
+        // else block
+        case 2: {
           modifiedProgram
-              << "LOG(\""
+              << "if (BRANCH_" << foundPointsIdxCurrentLine[0] << ") {LOG(\""
               << branchDict[foundPoints[foundPointsIdxCurrentLine[0]]][lineNum]
-              << "\");";
-        }
-        break;
-      }
-      // If two targets for the current line number, we can insert a simple if
-      // else block
-      case 2: {
-        modifiedProgram
-            << "if (BRANCH_" << foundPointsIdxCurrentLine[0] << ") {LOG(\""
-            << branchDict[foundPoints[foundPointsIdxCurrentLine[0]]][lineNum]
-            << "\")} else {LOG(\""
-            << branchDict[foundPoints[foundPointsIdxCurrentLine[1]]][lineNum]
-            << "\")}";
-        break;
-      }
-      // Default is more than 2, in this case, we need to insert a proper if,
-      // else if, else chain for all the targets available for the current
-      // line number.
-      default: {
-        // Insert initial if block
-        modifiedProgram
-            << "if (BRANCH_" << foundPointsIdxCurrentLine[0] << ") {LOG(\""
-            << branchDict[foundPoints[foundPointsIdxCurrentLine[0]]][lineNum]
-            << "\")}";
-
-        // Insert else if blocks for all branches before the last.
-        for (int successive = 1;
-             successive < foundPointsIdxCurrentLine.size() - 1; successive++) {
-          modifiedProgram
-              << " else if (BRANCH_" << foundPointsIdxCurrentLine[successive]
-              << ") {LOG(\""
-              << branchDict[foundPoints[foundPointsIdxCurrentLine[successive]]]
-                           [lineNum]
+              << "\")} else {LOG(\""
+              << branchDict[foundPoints[foundPointsIdxCurrentLine[1]]][lineNum]
               << "\")}";
+          break;
         }
+        // Default is more than 2, in this case, we need to insert a proper if,
+        // else if, else chain for all the targets available for the current
+        // line number.
+        default: {
+          // Insert initial if block
+          modifiedProgram
+              << "if (BRANCH_" << foundPointsIdxCurrentLine[0] << ") {LOG(\""
+              << branchDict[foundPoints[foundPointsIdxCurrentLine[0]]][lineNum]
+              << "\")}";
 
-        // Insert final else for the last branch point.
-        modifiedProgram
-            << "else {LOG(\""
-            << branchDict[foundPoints[foundPointsIdxCurrentLine
-                                          [foundPointsIdxCurrentLine.size() -
-                                           1]]][lineNum]
-            << "\")}";
+          // Insert else if blocks for all branches before the last.
+          for (int successive = 1;
+               successive < foundPointsIdxCurrentLine.size() - 1;
+               successive++) {
+            modifiedProgram
+                << " else if (BRANCH_" << foundPointsIdxCurrentLine[successive]
+                << ") {LOG(\""
+                << branchDict
+                       [foundPoints[foundPointsIdxCurrentLine[successive]]]
+                       [lineNum]
+                << "\")}";
+          }
 
-      } break;
+          // Insert final else for the last branch point.
+          modifiedProgram
+              << "else {LOG(\""
+              << branchDict[foundPoints[foundPointsIdxCurrentLine
+                                            [foundPointsIdxCurrentLine.size() -
+                                             1]]][lineNum]
+              << "\")}";
+
+        } break;
       }
 
       // Check to see if we encountered a call expr last. If branch target and
