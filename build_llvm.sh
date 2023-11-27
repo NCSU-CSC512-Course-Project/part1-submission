@@ -18,5 +18,5 @@ sudo mv clang+llvm-17.0.2-x86_64-linux-gnu-ubuntu-22.04/include/* /usr/local/inc
 sudo mv clang+llvm-17.0.2-x86_64-linux-gnu-ubuntu-22.04/lib/* /usr/local/lib
 
 # Update linker path for system
-echo "export LD_LINKER_PATH=/usr/local/lib:\$LD_LIBRARY_PATH" >> ~/.bashrc
+echo "export LD_LIBRARY_PATH=/usr/local/lib:\$LD_LIBRARY_PATH" >> ~/.bashrc
 source ~/.bashrc
