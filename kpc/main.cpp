@@ -23,4 +23,5 @@ int main(int argc, char *argv[]) {
   // Init the KPC
   KeyPointsCollector kpc(
       filename, (argc > 2 && !std::string(argv[2]).compare("--debug")));
+  kpc.executeToolchain();
 }

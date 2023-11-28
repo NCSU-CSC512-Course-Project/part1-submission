@@ -259,9 +259,6 @@ class KeyPointsCollector {
                                  std::shared_ptr<FunctionDeclInfo> function,
                                  int *branchCount);
 
-  // Runs all necessary functions for part 1
-  void executeToolchain();
-
 public:
   // KPC ctor, takes file name in, ownership is transfered to KPC.
   // Inits the translation unit, invoking the clang parser.
@@ -319,6 +316,9 @@ public:
   // Core AST traversal function, once the translation unit has been parsed,
   // recursively visit nodes and add to cursorObjs if they are of interest.
   void collectCursors();
+
+  // Runs all necessary functions for part 1
+  void executeToolchain();
 
 };
 
