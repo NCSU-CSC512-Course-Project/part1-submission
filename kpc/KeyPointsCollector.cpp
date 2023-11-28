@@ -19,11 +19,11 @@ KeyPointsCollector::KeyPointsCollector(const std::string &filename, bool debug)
 
     // Format the file
     std::stringstream formatCommand;
-    formatCommand << "clang-format -i --style=file_format_style " << filename;
+    formatCommand << "clang-format -i --style=file:file_format_style " << filename;
     system(formatCommand.str().c_str());
 
     // Remove include directives. We do this before parsing the translation unit
-    // as LibClang with parse ALL included files. For the sake of this project,
+  // as LibClang with parse ALL included files. For the sake of this project,
     // we are only looking at user defined functions, so we dont need to parse
     // any included files.
     removeIncludeDirectives();
