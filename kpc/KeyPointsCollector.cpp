@@ -59,7 +59,6 @@ KeyPointsCollector::KeyPointsCollector(const std::string &filename, bool debug)
 
 KeyPointsCollector::~KeyPointsCollector() {
   clang_disposeTranslationUnit(translationUnit);
-  clang_disposeIndex(KPCIndex);
 }
 
 void KeyPointsCollector::removeIncludeDirectives() {
