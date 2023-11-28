@@ -249,10 +249,6 @@ class KeyPointsCollector {
   // Add completed  branch to vector of branches and pop from stack;
   void addCompletedBranch();
 
-  // Core AST traversal function, once the translation unit has been parsed,
-  // recursively visit nodes and add to cursorObjs if they are of interest.
-  void collectCursors();
-
   // Creates dictionary file of branch points.
   void createDictionaryFile();
 
@@ -262,14 +258,6 @@ class KeyPointsCollector {
   insertFunctionBranchPointDecls(std::ofstream &program,
                                  std::shared_ptr<FunctionDeclInfo> function,
                                  int *branchCount);
-
-  // Once the transformed program has been created, compile it with system C
-  // compiler.
-  void compileModified();
-
-  // Performs the transformation of the program so it can be compiled with
-  // branch statements.
-  void transformProgram();
 
   // Runs all necessary functions for part 1
   void executeToolchain();
@@ -316,6 +304,22 @@ public:
   // Invokes Valgrind toolchain to analyze the original programs executed
   // instructions.
   void invokeValgrind();
+
+  // Does everything needed to get the branch pointer trace as a string.
+  std::string getBPTrace();
+  //
+  // Once the transformed program has been created, compile it with system C
+  // compiler.
+  void compileModified();
+
+  // Performs the transformation of the program so it can be compiled with
+  // branch statements.
+  void transformProgram();
+
+  // Core AST traversal function, once the translation unit has been parsed,
+  // recursively visit nodes and add to cursorObjs if they are of interest.
+  void collectCursors();
+
 };
 
 #endif // KEY_POINTS_COLLECTOR__H
