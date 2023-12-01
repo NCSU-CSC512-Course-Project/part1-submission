@@ -79,8 +79,8 @@ class KeyPointsCollector {
                                           CXClientData kpc);
 
   // Visitor for a VarDecl, to collect name and location
-  static CXChildVisitResult VisitVarDecl(CXCursor current, CXCursor parent,
-                                         CXClientData kpc);
+  static CXChildVisitResult
+  VisitVarOrParamDecl(CXCursor current, CXCursor parent, CXClientData kpc);
 
   // Visitor for a function pointer, just to extract the name of the function it
   // is pointing to.
@@ -319,7 +319,6 @@ public:
 
   // Runs all necessary functions for part 1
   void executeToolchain();
-
 };
 
 #endif // KEY_POINTS_COLLECTOR__H

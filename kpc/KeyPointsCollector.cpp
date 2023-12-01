@@ -19,11 +19,12 @@ KeyPointsCollector::KeyPointsCollector(const std::string &filename, bool debug)
 
     // Format the file
     std::stringstream formatCommand;
-    formatCommand << "clang-format -i --style=file:file_format_style " << filename;
+    formatCommand << "clang-format -i --style=file:file_format_style "
+                  << filename;
     system(formatCommand.str().c_str());
 
     // Remove include directives. We do this before parsing the translation unit
-  // as LibClang with parse ALL included files. For the sake of this project,
+    // as LibClang with parse ALL included files. For the sake of this project,
     // we are only looking at user defined functions, so we dont need to parse
     // any included files.
     removeIncludeDirectives();
@@ -210,8 +211,8 @@ CXChildVisitResult KeyPointsCollector::VisitorFunctionCore(CXCursor current,
   }
 
   // If check to see if it is a VarDecl
-  if (currKind == CXCursor_VarDecl) {
-    clang_visitChildren(parent, &KeyPointsCollector::VisitVarDecl, kpc);
+  if (currKind == CXCursor_VarDecl || currKind == CXCursor_ParmDecl) {
+    clang_visitChildren(parent, &KeyPointsCollector::VisitVarOrParamDecl, kpc);
   }
 
   return CXChildVisit_Recurse;
@@ -328,9 +329,9 @@ CXChildVisitResult KeyPointsCollector::VisitFuncPtr(CXCursor current,
   return CXChildVisit_Recurse;
 }
 
-CXChildVisitResult KeyPointsCollector::VisitVarDecl(CXCursor current,
-                                                    CXCursor parent,
-                                                    CXClientData kpc) {
+CXChildVisitResult KeyPointsCollector::VisitVarOrParamDecl(CXCursor current,
+                                                           CXCursor parent,
+                                                           CXClientData kpc) {
   KeyPointsCollector *instance = static_cast<KeyPointsCollector *>(kpc);
 
   // First retrive the line number
@@ -356,8 +357,9 @@ CXChildVisitResult KeyPointsCollector::VisitVarDecl(CXCursor current,
   // Add to map of FuncDecls
   if (varMap.find(varName) == varMap.end()) {
     if (instance->debug) {
-      std::cout << "Found VarDecl: " << varName << " at line # "
-                << varDeclLineNum << '\n';
+      std::cout << "Found "
+                << (current.kind == CXCursor_VarDecl ? "VarDecl" : "ParamDecl")
+                << ": " << varName << " at line # " << varDeclLineNum << '\n';
     }
     instance->addVarDeclToMap(varName, varDeclLineNum +
                                            instance->includeDirectives.size());
