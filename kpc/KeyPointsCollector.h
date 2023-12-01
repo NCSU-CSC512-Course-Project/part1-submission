@@ -319,6 +319,11 @@ public:
 
   // Runs all necessary functions for part 1
   void executeToolchain();
+
+  // Return the number of include directives in the file so the sifd can re map lie numbers.
+  unsigned getNumIncludeDirectives() const {
+    return includeDirectives.size();
+  }
 };
 
 #endif // KEY_POINTS_COLLECTOR__H

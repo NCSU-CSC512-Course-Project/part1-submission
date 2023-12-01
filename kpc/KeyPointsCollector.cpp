@@ -139,7 +139,7 @@ bool KeyPointsCollector::checkChildAgainstStackTop(CXCursor child) {
     if (childLineNum > currBranch->compoundEndLineNum ||
         (childLineNum == currBranch->compoundEndLineNum &&
          childColNum > currBranch->compoundEndColumnNum)) {
-      getCurrentBranch()->addTarget(childLineNum + includeDirectives.size());
+      getCurrentBranch()->addTarget(childLineNum + etNumIncludeDirectives());
       if (debug) {
         printFoundTargetPoint();
       }
@@ -178,7 +178,7 @@ CXChildVisitResult KeyPointsCollector::VisitorFunctionCore(CXCursor current,
                               nullptr, nullptr);
     // Increment the branch point by the amount of include directives we used.
     instance->getCurrentBranch()->branchPoint +=
-        instance->includeDirectives.size();
+        instance->getNumIncludeDirectives();
 
     // Debug routine
     if (instance->debug) {
@@ -237,7 +237,7 @@ CXChildVisitResult KeyPointsCollector::VisitCompoundStmt(CXCursor current,
 
   // Append line number to targets
   instance->getCurrentBranch()->addTarget(targetLineNumber +
-                                          instance->includeDirectives.size());
+                                          instance->getNumIncludeDirectives());
   if (instance->debug) {
     instance->printFoundTargetPoint();
   }
@@ -259,7 +259,7 @@ CXChildVisitResult KeyPointsCollector::VisitCallExpr(CXCursor current,
     unsigned callLocLine;
     clang_getSpellingLocation(callExprLoc, instance->getCXFile(), &callLocLine,
                               nullptr, nullptr);
-    instance->addCall(callLocLine + instance->includeDirectives.size(),
+    instance->addCall(callLocLine + instance->getNumIncludeDirectives(),
                       calleeName);
     // Possibly set recursion flag for function being called.
 
@@ -274,7 +274,7 @@ CXChildVisitResult KeyPointsCollector::VisitCallExpr(CXCursor current,
     unsigned callLocLine;
     clang_getSpellingLocation(callExprLoc, instance->getCXFile(), &callLocLine,
                               nullptr, nullptr);
-    instance->addCall(callLocLine + instance->includeDirectives.size(),
+    instance->addCall(callLocLine + instance->getNumIncludeDirectives(),
                       instance->funcPtrs[calleeName]);
     clang_disposeTokens(instance->getTU(), calleeNameTok, 1);
     clang_disposeString(calleeNameStr);
@@ -362,7 +362,7 @@ CXChildVisitResult KeyPointsCollector::VisitVarOrParamDecl(CXCursor current,
                 << ": " << varName << " at line # " << varDeclLineNum << '\n';
     }
     instance->addVarDeclToMap(varName, varDeclLineNum +
-                                           instance->includeDirectives.size());
+                                           instance->getNumIncludeDirectives());
   }
   clang_disposeTokens(instance->getTU(), varDeclToken, 1);
   return CXChildVisit_Break;
@@ -396,8 +396,8 @@ CXChildVisitResult KeyPointsCollector::VisitFuncDecl(CXCursor current,
 
     // Add to map
     instance->addFuncDecl(std::make_shared<FunctionDeclInfo>(
-        begLineNum + instance->includeDirectives.size(),
-        endLineNum + instance->includeDirectives.size(), funcName,
+        begLineNum + instance->getNumIncludeDirectives(),
+        endLineNum + instance->getNumIncludeDirectives(), funcName,
         clang_getCString(funcReturnTypeSpelling)));
     instance->currentFunction = instance->getFunctionByName(funcName);
     if (instance->debug) {
