@@ -93,10 +93,14 @@ void KeyPointsCollector::reInsertIncludeDirectives() {
   if (file.good() && tempFile.good()) {
     while (getline(file, currentLine)) {
       if (MAP_FIND(includeDirectives, lineNum)) {
-        tempFile << includeDirectives[lineNum] << '\n';
+        while(MAP_FIND(includeDirectives, lineNum)) {
+          tempFile << includeDirectives[lineNum++] << '\n';
+        }
+        tempFile << currentLine << '\n';
+      } else {
+        lineNum++;
+        tempFile << currentLine << '\n';
       }
-      lineNum++;
-      tempFile << currentLine << '\n';
     }
   }
 
@@ -139,7 +143,7 @@ bool KeyPointsCollector::checkChildAgainstStackTop(CXCursor child) {
     if (childLineNum > currBranch->compoundEndLineNum ||
         (childLineNum == currBranch->compoundEndLineNum &&
          childColNum > currBranch->compoundEndColumnNum)) {
-      getCurrentBranch()->addTarget(childLineNum + etNumIncludeDirectives());
+      getCurrentBranch()->addTarget(childLineNum + getNumIncludeDirectives());
       if (debug) {
         printFoundTargetPoint();
       }
