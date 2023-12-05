@@ -139,7 +139,7 @@ bool KeyPointsCollector::checkChildAgainstStackTop(CXCursor child) {
     if (childLineNum > currBranch->compoundEndLineNum ||
         (childLineNum == currBranch->compoundEndLineNum &&
          childColNum > currBranch->compoundEndColumnNum)) {
-      getCurrentBranch()->addTarget(childLineNum + etNumIncludeDirectives());
+      getCurrentBranch()->addTarget(childLineNum + getNumIncludeDirectives());
       if (debug) {
         printFoundTargetPoint();
       }
